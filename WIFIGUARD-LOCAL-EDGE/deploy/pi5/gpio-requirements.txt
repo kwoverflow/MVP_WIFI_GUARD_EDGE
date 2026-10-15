@@ -1,0 +1,2 @@
+# Linux GPIO Python binding; upstream may supply a source distribution.
+gpiod==2.2.1

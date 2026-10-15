@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# 기기별 실제 설정 (device.toml.example 만 커밋)
+config/device.toml
+
+# mTLS 인증서
+deploy/certs/*
+!deploy/certs/.gitignore
+
+# 단절 구간 스풀 DB
+*.sqlite
+*.db
+
+# 로그
+*.log

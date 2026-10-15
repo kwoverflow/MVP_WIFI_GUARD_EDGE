@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wifiguard-local-edge"
+version = "0.1.0"
+description = "Standalone Raspberry Pi 5 CSI features and CPU fall inference"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "wifiguard-edge", "csi-fall-segmentation", "numba>=0.61,<0.66",
+    "psutil>=6,<8", "threadpoolctl>=3,<4", "torch>=2.6,<3",
+]
+
+[project.optional-dependencies]
+pi = ["gpiod>=2.2.1,<3"]
+onnx = ["onnxruntime==1.23.2"]
+pi5 = ["wifiguard-contracts"]
+export = ["onnxruntime==1.23.2", "onnx>=1.19,<1.21", "onnxscript>=0.5,<0.8"]
+test = ["pytest>=8,<10", "wifiguard-contracts"]
+pc = ["psycopg[binary]>=3.2,<4", "wifiguard-contracts"]
+
+[project.scripts]
+wifiguard-local-edge = "wifiguard_local_edge.runtime:main"
+wifiguard-local-benchmark = "wifiguard_local_edge.benchmark:main"
+
+[tool.uv.sources]
+wifiguard-edge = { path = "../WIFIGUARD-RASPBERRY", editable = true }
+csi-fall-segmentation = { path = "../WIFIGUARD-BACKEND/services/csi-fall-segmentation", editable = true }
+wifiguard-contracts = { path = "../WIFIGUARD-BACKEND/packages/contracts", editable = true }
+torch = { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

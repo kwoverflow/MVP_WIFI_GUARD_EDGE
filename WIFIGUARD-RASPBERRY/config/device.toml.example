@@ -1,0 +1,49 @@
+# 기기별 설정. 실제 파일(device.toml)은 gitignore 대상이다.
+#   cp config/device.toml.example config/device.toml
+#
+# 여기 있는 값은 config/default.toml 을 덮어쓴다. default.toml 에 없는 키를 쓰면
+# 기동 시 오류가 난다 — 오타를 조용히 무시하지 않기 위해서다 (config.py).
+
+[device]
+tenant_id = "home-abcd1234"     # HOME 은 "home-{userId}", FACILITY 는 시설 UUID
+device_id = "00000000-0000-0000-0000-000000000000"
+# 토픽은 서버가 발급한다: wifiguard/{tenant_id}/{device_id}/{presence|telemetry|signal|cmd|ack}
+# 값은 백엔드 `GET /api/v1/devices` 의 mqttTopic 에서 그대로 가져온다.
+
+[mqtt]
+broker_host = "xxxxxxxxxx-ats.iot.ap-northeast-2.amazonaws.com"
+broker_port = 8883
+# 개발용 로컬 Mosquitto 는 평문 1883 을 쓴다:
+#   broker_host = "localhost"
+#   broker_port = 1883
+#   tls = false
+tls         = true
+ca_cert     = "deploy/certs/AmazonRootCA1.pem"
+client_cert = "deploy/certs/device.pem.crt"
+client_key  = "deploy/certs/device.private.key"
+
+[transport]
+# "serial" — 기존 UART 경로 (csi_recv 펌웨어)
+# "replay" — Pi·수신기 없이 개발 PC 에서 전 배선 구동 (tools/replay_edge.py)
+# "spi"    — 검증된 WGSP v1 Batch8 경로 (amfall_spi_receiver 펌웨어)
+kind = "spi"
+
+# --- kind = "serial" ---
+serial_port = ""        # 비우면 자동 탐지 (pyserial list_ports)
+baudrate = 2000000      # ★ 펌웨어 CONFIG_ESP_CONSOLE_UART_BAUDRATE 와 반드시 같아야 한다.
+                        #   921600 → 2000000 (2026-09-10). 어긋나면 프레임이 하나도 파싱되지 않는다.
+
+# --- kind = "replay" ---
+replay_source = "synthetic"   # "synthetic" | 저장된 recording 경로
+replay_speed = 1.0            # 1.0 = 실시간
+
+# --- kind = "spi" ---
+spi_bus = 0
+spi_device = 0
+max_speed_hz = 6000000
+gpio_data_ready = 25
+ready_gpio_chip = "/dev/gpiochip0"
+ready_bias = "pull-down"
+spi_batch_frames = 8
+spi_transfer_api = "direct-ioctl"
+spi_protocol_resync_seconds = 0.05

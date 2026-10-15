@@ -1,0 +1,28 @@
+[project]
+name = "wifiguard-api"
+version = "0.1.0"
+description = "WIFI-GUARD service API with HOME/FACILITY CRUD, JWT, live ingest and fall state"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pyjwt>=2.9",
+  "argon2-cffi>=23.1",
+  "psycopg[binary]>=3.2",
+  "kafka-python>=2.1",
+  "wifiguard-db",
+  "wifiguard-contracts",
+  "wifiguard-notify",
+]
+
+[tool.uv.sources]
+wifiguard-db = { workspace = true }
+wifiguard-contracts = { workspace = true }
+wifiguard-notify = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wifiguard_api"]

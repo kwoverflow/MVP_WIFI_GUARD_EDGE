@@ -1,0 +1,139 @@
+# WIFI-GUARD 엣지 기본 설정
+#
+# 값의 출처는 파이썬 dataclass다 — 이 파일은 그 기본값을 재현할 뿐이다.
+# 둘이 어긋나면 tests/test_config_parity.py 가 실패한다. 고칠 때는 반드시 양쪽을 함께 고칠 것.
+#
+#   [device]      ← src/wifiguard_edge/config.py            DeviceConfig
+#   [transport]   ← src/wifiguard_edge/config.py            TransportConfig
+#   [presence]    ← src/wifiguard_edge/presence/config.py   PresenceConfig
+#   [features]    ← src/wifiguard_edge/features/realtime.py FeatureConfig  (frozen · 변경 금지)
+#   [calibration] ← src/wifiguard_edge/config.py            CalibrationConfig
+#   [gating]      ← src/wifiguard_edge/config.py            GatingConfig
+#   [mqtt]        ← src/wifiguard_edge/config.py            MqttConfig
+#
+# 기기별 값은 config/device.toml 이 덮어쓴다 (device.toml.example 참조).
+# 알 수 없는 섹션·키가 있으면 기동이 중단된다 — 오타를 조용히 무시하지 않기 위해서다.
+
+[device]
+# 반드시 device.toml 에서 채워야 한다. 비어 있으면 기동하지 않는다.
+tenant_id = ""      # FACILITY 는 시설 UUID, HOME 은 "home-{userId}"
+device_id = ""      # 백엔드가 발급한 기기 UUID
+
+[transport]
+kind = "serial"                # serial | replay | spi (WGSP Batch8)
+serial_port = ""               # 비우면 자동 탐지
+baudrate = 2000000             # ★ 펌웨어 CONFIG_ESP_CONSOLE_UART_BAUDRATE 와 같아야 한다 (2026-09-10: 921600 → 2000000)
+replay_source = "synthetic"
+replay_speed = 1.0
+spi_bus = 0
+spi_device = 0
+max_speed_hz = 6000000         # 실기 검증값
+gpio_data_ready = 25
+ready_gpio_chip = "/dev/gpiochip0"
+ready_bias = "pull-down"
+spi_batch_frames = 8
+spi_transfer_api = "direct-ioctl"
+spi_protocol_resync_seconds = 0.05
+
+[presence]
+# --- MV(움직임) 신호체인 ---
+window_sec = 3.0
+stride_sec = 0.25
+fs_hz = 100.0                  # 리샘플 그리드
+mv_window_sec = 0.5            # → omega = round((0.5*100-1)/2) = 24  (banker's rounding: 24.5 → 24)
+n_streams = 10                 # 선택 서브캐리어 수
+bandpass_low = 0.5
+bandpass_high = 50.0
+bandpass_order = 4
+presence_mv_threshold = 2.0    # ★ 캘리브레이션이 런타임에 갱신 (UI 라벨 "움직임 임계값")
+
+# --- Wander(미세움직임) 신호체인 ---
+# 사전필터는 넓게(0.05–5Hz), Welch 측정 대역은 좁게(0.1–0.5Hz) 잡아야 한다.
+# 두 대역을 같게 만들면 사전필터가 이미 전체 에너지를 측정 대역에 가둔 뒤
+# 정규화하므로 측정값의 변별력이 사라진다 (실측 확인 사항).
+wander_window_sec = 10.0
+wander_mv_window_sec = 1.0     # → wander_omega = round((1.0*100-1)/2) = 50  (49.5 → 50)
+wander_prefilter_low = 0.05
+wander_prefilter_high = 5.0
+wander_bandpass_low = 0.1
+wander_bandpass_high = 0.5
+wander_baseline = 0.5          # ★ 캘리브레이션이 런타임에 갱신 (UI 라벨 "재실 baseline")
+wander_ratio_threshold = 1.8   # baseline 대비 배수 (절대값 아님)
+wander_min_duration_s = 2.0    # 디바운스
+
+presence_timeout_s = 10.0
+
+# 주의: PresenceDetector.__init__의 기본값(mv_threshold=2.5, wander_ratio_threshold=2.0,
+# presence_timeout_s=6.0)은 위 값과 다르다. 런타임에는 매 틱 set_thresholds()가
+# 덮어쓰므로 위 PresenceConfig 값이 적용된다. 명세 §4 Phase1은 이관 시 두 기본값을
+# 일치시킬 것을 권고한다 — 아직 반영되지 않았다.
+
+[features]
+# ★ 모델 계약. 체크포인트가 이 형태로 학습되었으므로 변경 금지 (명세 §4 Phase3-4).
+# 엣지는 이 중 select/resample/PCA 까지만 쓴다. image_size 이하는 클라우드 모델서버가
+# features_from_signal() 에서 쓴다 — 같은 코드 객체를 공유하므로 값도 하나여야 한다.
+window_seconds = 3.0
+target_subcarriers = 30
+train_raw_pairs = 245
+train_drop_pair_indices = [121, 122]
+omega = 30
+moving_variance_radius_seconds = 0.4
+freq_min_hz = 1.0
+freq_max_hz = 170.0
+image_size = 224               # S3 스칼로그램 (224, 224)
+th_scmax = 1.0
+kappa = 1.0
+carrier_hz = 2.4e9
+acf_lag_seconds = 0.4
+acf_lag_output_bins = 128      # PCA-ACF (1, 128, 64)
+acf_time_bins = 64
+acf_clip_percentile = 99.5
+fs_quantize_hz = 0.25          # ★ freq_to_scale 캐시 적중의 핵심. 빠지면 호출당 0.5초 → 즉시 예산 초과
+
+[calibration]
+# 4단계 총 약 61초. 키 이름은 run_calibration() 의 키워드 인자와 같다.
+leave_wait_s = 30.0            # 1단계: 설치자 퇴실 대기
+silence_confirm_s = 0.2        # 2단계: UART 2 Mbaud 드레인(~3.3ms, 660B) 대비 충분한 여유.
+                               # 실제 상한은 펌웨어의 ~1s AGC 창이라 baud 를 올려도 이 값은 그대로다.
+                               # ★ SPI 전환 시에는 재산정 필요 — 50ms 주기 트랜잭션이라
+                               #   침묵 감지에 2~3 트랜잭션(100~150ms)이 필요할 수 있다 (§9-3)
+silence_timeout_s = 3.0
+resume_timeout_s = 20.0        # 3단계: 펌웨어 AGC 고정 후 스트림 재개 대기
+baseline_window_s = 30.0       # 4단계: baseline 측정 (라이브 10s wander 창보다 길게)
+poll_interval_s = 0.05
+k_mv = 2.0                     # 임계값 = 평균 + k·표준편차. 정밀도보다 민감도 쪽으로 잡은 잠정값
+mv_floor = 0.3
+wander_baseline_floor = 0.05
+
+[gating]
+# 원칙: 사람이 없는 구간의 신호는 올리지 않는다.
+# 게이트가 닫혀 있었다는 사실 자체는 telemetry로 항상 보고해야 한다 —
+# 무증상 침묵과 "정상적으로 조용함"을 구별할 수 있어야 하기 때문이다.
+signal_publish_hz = 4.0
+telemetry_interval_s = 1.0
+telemetry_absent_interval_s = 5.0
+linger_after_absent_s = 10.0   # ABSENT 전이 후에도 이만큼 더 올린다.
+                               # 낙상하면 사람이 움직이지 않아 재실이 ABSENT 로 떨어지는데,
+                               # 곧바로 게이트를 닫으면 정작 필요한 구간을 잃는다.
+publish_when_unknown = true    # 재실 미상(기동 직후)일 때도 올린다 → gate_reason="forced"
+
+[mqtt]
+# 토픽 계약 SSOT 는 wifiguard_contracts.topics (백엔드 레포). 여기에 topic_prefix 를 두지 않는다.
+# leaf: wifiguard/{tenant}/{device}/{presence|telemetry|signal|cmd|ack}
+#
+# signal 은 select_pc_signal() 의 1-D 합성 대표신호(약 2KB)를 float32 무손실로 보낸다.
+# 양자화하면 q_metric 이 바뀌어 S3 디노이즈 강도가 달라진다 (contracts mqtt.SignalMsg docstring).
+broker_host = "localhost"      # 개발: Mosquitto / 운영: AWS IoT Core
+broker_port = 8883             # 아웃바운드 TLS 전용. 포트포워딩·고정 IP 불필요
+tls = true                     # 로컬 개발 Mosquitto 는 device.toml 에서 false + 1883
+ca_cert = ""
+client_cert = ""
+client_key = ""
+username = ""
+password = ""
+keepalive_s = 30
+qos_presence = 1
+qos_telemetry = 1
+qos_signal = 0                 # 최신성 우선 — 늦은 신호는 가치가 없다
+qos_cmd_ack = 1
+queue_max = 256                # 넘치면 오래된 signal 부터 버린다. 발행 지연이 감지 루프를 막으면 안 된다

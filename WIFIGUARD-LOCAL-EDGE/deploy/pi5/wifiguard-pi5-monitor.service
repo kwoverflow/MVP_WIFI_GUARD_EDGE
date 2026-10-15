@@ -1,0 +1,25 @@
+[Unit]
+Description=WIFI-GUARD aligned whole-stack CPU memory IO and storage monitoring
+After=network.target
+
+[Service]
+Type=simple
+User=wifiguard
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE
+EnvironmentFile=/etc/wifiguard/pi5.env
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/python -m wifiguard_local_edge.live_monitor --interval 2
+StateDirectory=wifiguard-pi5
+UMask=0077
+MemoryAccounting=true
+MemoryMax=128M
+CPUAccounting=true
+CPUQuota=10%
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wifiguard-pi5
+
+[Install]
+WantedBy=multi-user.target
