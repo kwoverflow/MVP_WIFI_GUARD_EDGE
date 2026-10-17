@@ -2,9 +2,10 @@
 
 ## 현재 배포 구분 — 2026-10-17
 
-애플리케이션 전체는 [PR #1](https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/pull/1)의
-`codex/pi5-edge-release-20261015` 브랜치에 있습니다. 아직 머지하지 않은 `main`을 clone하면
-초기 README만 받습니다. [최신 반영·검증](RELEASE-20261017.md)을 우선 확인하세요.
+이 문서는 개인 Edge 저장소의 `main`을 기준으로 하는 포트폴리오 소스 배포 안내입니다.
+검토·머지 이력은 [PR #1](https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/pull/1),
+기능·검증 범위는 [최신 반영·검증](RELEASE-20261017.md)을 확인하세요.
+`git clone https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE.git`으로 기본 브랜치를 받습니다.
 
 기존 장비를 인계하는 조원은 별도로 전달한 2026-10-17 준비 장비용 ZIP을 사용합니다.
 그 ZIP에는 빌드된 웹·승인된 모델·ARM64 휠·Android APK가 들어 있지만 공개 Git에는 없습니다.

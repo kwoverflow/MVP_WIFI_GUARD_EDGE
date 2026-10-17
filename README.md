@@ -4,10 +4,19 @@ ESP32-C5의 CSI를 받아 Pi5 안에서 재실 감지, 낙상 추론, 이력 저
 
 이 저장소는 **소스 배포본**입니다. 모델 가중치, 인증 키, DB, 센서 데이터, ARM64 설치 휠과 빌드된 UI는 공개 Git에 포함하지 않습니다. 복제만으로 실물 센서가 동작하지는 않습니다. 별도로 제공된 원본 모델과 OS·비공개 설정이 필요합니다.
 
-> **코드가 main에서 안 보인다면:** 현재 애플리케이션은 [Edge PR #1](https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/pull/1)의 검토 브랜치에 있습니다. PR을 머지하기 전까지 `main`에는 초기 README만 보이는 것이 정상입니다. [실제 소스 트리](https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/tree/codex/pi5-edge-release-20261015)에서 확인하거나 다음 명령으로 받으세요. 이 문서는 해당 검토 브랜치의 README입니다.
+## 포트폴리오 안내
+
+개인 Edge 저장소의 `main`을 기준으로 공개하는 프로젝트입니다. 구현 내용과 검토 이력은 [Edge PR #1](https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/pull/1)에 남깁니다. 기존 팀 저장소와 클라우드/MLOps 저장소는 별개입니다.
+
+- **구조와 최적화**: [수신·입력 처리·저장 보장·Wi-Fi·푸시 개선](docs/RELEASE-20261017.md)
+- **검증 근거**: [672개 소프트웨어 회귀 검사와 한계](docs/validation-20261017.json), [GitHub CI](https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/actions)
+- **실행과 인수**: [소스 빌드·Pi5 배포·운영 준비](docs/DEPLOYMENT.md), [모델 인수 기준](models/README.md)
+- **코드 탐색**: [Edge 런타임](WIFIGUARD-LOCAL-EDGE/src/wifiguard_local_edge), [웹 UI](WIFIGUARD-FRONTEND/src), [API·DB·알림](WIFIGUARD-BACKEND)
+
+검증된 소프트웨어 범위와 아직 남은 실물·정확도 검증을 구분해서 기술합니다. 설치용 비공개 키나 개인 데이터는 포트폴리오에 공개하지 않습니다.
 
 ```sh
-git clone --branch codex/pi5-edge-release-20261015 https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE.git
+git clone https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE.git
 ```
 
 ## 2026-10-17 최신 반영
@@ -18,7 +27,7 @@ git clone --branch codex/pi5-edge-release-20261015 https://github.com/kwoverflow
 - 실제 센서 모드를 바꾸지 않는 **만료형 수동 FCM 시연**. 자동 낙상 푸시와 별도이며 기본 OFF.
 - 최신 PC·모바일 웹 소스, API/OpenAPI 계약, 회귀 검사와 [최신 검증·배포 차이](docs/RELEASE-20261017.md).
 
-개인 인계용 완성 ZIP과 공개 소스는 다릅니다. **Firebase 암호화 키 봉투·해제 암호도 공개 Git/PR에는 넣지 않습니다.** 기존 Pi5 조원 인계는 비공개로 전달한 ZIP을 사용하고, 개발자는 이 브랜치에서 소스를 검토/빌드합니다.
+개인 인계용 완성 ZIP과 공개 소스는 다릅니다. **Firebase 암호화 키 봉투·해제 암호도 공개 Git/PR에는 넣지 않습니다.** 기존 Pi5 조원 인계는 비공개로 전달한 ZIP을 사용하고, 개발자는 `main`에서 소스를 검토/빌드합니다.
 
 ## 포함한 기능
 
