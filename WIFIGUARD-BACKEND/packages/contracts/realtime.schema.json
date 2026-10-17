@@ -1,0 +1,709 @@
+{
+  "$defs": {
+    "AuthFrame": {
+      "additionalProperties": false,
+      "description": "연결 후 **첫 프레임이어야 한다.** 5초 안에 오지 않으면 서버가 1008 로 닫는다.\n\n쿼리스트링이나 헤더가 아니라 프레임으로 받는 이유: 브라우저 WebSocket API 는 커스텀\n헤더를 붙일 수 없고, URL 에 토큰을 넣으면 프록시·서버 접근 로그에 그대로 남는다.",
+      "properties": {
+        "token": {
+          "description": "REST 와 같은 access JWT",
+          "minLength": 1,
+          "title": "Token",
+          "type": "string"
+        },
+        "type": {
+          "const": "auth",
+          "default": "auth",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "title": "AuthFrame",
+      "type": "object"
+    },
+    "DeviceLive": {
+      "additionalProperties": false,
+      "description": "한 기기의 현재 상태. `presence`/`fall` 이 None 이면 그 축이 동작하지 않는 것이다.",
+      "properties": {
+        "device_id": {
+          "format": "uuid",
+          "title": "Device Id",
+          "type": "string"
+        },
+        "fall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FallBlock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "last_seen_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Seen At"
+        },
+        "link": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkStats"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "online": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "None 은 '모름'(텔레메트리를 한 번도 받은 적 없음)이다. False('연결 끊김')와 다르다",
+          "title": "Online"
+        },
+        "presence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresenceBlock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "device_id"
+      ],
+      "title": "DeviceLive",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "detail"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "FallBlock": {
+      "additionalProperties": false,
+      "description": "구 `detector.live_payload()`(state_machine.py:215-225) 5필드 + 후처리 표기.\n\n`postprocess` 를 실어 보내는 이유는 kafka.PostProcess docstring 참조 —\n같은 임계값이라도 후처리에 따라 오탐률이 4배 달라진다.",
+      "properties": {
+        "detect_state": {
+          "enum": [
+            "IDLE",
+            "SUSPECT",
+            "FALL",
+            "COOLDOWN"
+          ],
+          "title": "Detect State",
+          "type": "string"
+        },
+        "fall_count": {
+          "default": 0,
+          "title": "Fall Count",
+          "type": "integer"
+        },
+        "fall_event_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Committed fall_events row ID for acknowledgement; None when not persisted",
+          "title": "Fall Event Id"
+        },
+        "last_fall_time": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Fall Time"
+        },
+        "postprocess": {
+          "enum": [
+            "none",
+            "causal_mode5",
+            "centered_mode5",
+            "segmentation_a",
+            "segmentation_b"
+          ],
+          "title": "Postprocess",
+          "type": "string"
+        },
+        "proba_fall": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proba Fall"
+        },
+        "threshold": {
+          "title": "Threshold",
+          "type": "number"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "detect_state",
+        "threshold",
+        "postprocess",
+        "updated_at"
+      ],
+      "title": "FallBlock",
+      "type": "object"
+    },
+    "HelloEvent": {
+      "additionalProperties": false,
+      "description": "인증 성공 직후 1회. 구독 가능한 기기 목록을 알려준다.",
+      "properties": {
+        "device_ids": {
+          "description": "이 사용자 스코프의 전체 기기",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Device Ids",
+          "type": "array"
+        },
+        "protocol_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "server_time": {
+          "format": "date-time",
+          "title": "Server Time",
+          "type": "string"
+        },
+        "tenant_id": {
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "hello",
+          "default": "hello",
+          "title": "Type",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenant_id",
+        "user_id",
+        "device_ids",
+        "server_time"
+      ],
+      "title": "HelloEvent",
+      "type": "object"
+    },
+    "LinkStats": {
+      "additionalProperties": false,
+      "description": "수신기 링크 상태. 구 `/monitor/status` 의 시리얼 그룹과 `/ws/live` 기본 필드를 계승한다.",
+      "properties": {
+        "amp_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amp Mean"
+        },
+        "amp_std": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amp Std"
+        },
+        "baud": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baud"
+        },
+        "buffered_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Buffered Seconds"
+        },
+        "checksum_errors": {
+          "default": 0,
+          "title": "Checksum Errors",
+          "type": "integer"
+        },
+        "connected": {
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "frames_ok": {
+          "default": 0,
+          "title": "Frames Ok",
+          "type": "integer"
+        },
+        "hz_1s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hz 1S"
+        },
+        "mac_filtered": {
+          "default": 0,
+          "title": "Mac Filtered",
+          "type": "integer"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Port"
+        },
+        "reconnects": {
+          "default": 0,
+          "title": "Reconnects",
+          "type": "integer"
+        },
+        "resyncs": {
+          "default": 0,
+          "title": "Resyncs",
+          "type": "integer"
+        },
+        "rssi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rssi"
+        },
+        "transport": {
+          "enum": [
+            "uart",
+            "spi",
+            "replay"
+          ],
+          "title": "Transport",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connected",
+        "transport"
+      ],
+      "title": "LinkStats",
+      "type": "object"
+    },
+    "LiveEvent": {
+      "additionalProperties": false,
+      "description": "구독한 기기의 상태 갱신. 10Hz 상한으로 합쳐 보낸다(엣지는 4Hz).",
+      "properties": {
+        "devices": {
+          "items": {
+            "$ref": "#/$defs/DeviceLive"
+          },
+          "title": "Devices",
+          "type": "array"
+        },
+        "server_time": {
+          "format": "date-time",
+          "title": "Server Time",
+          "type": "string"
+        },
+        "type": {
+          "const": "live",
+          "default": "live",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "devices",
+        "server_time"
+      ],
+      "title": "LiveEvent",
+      "type": "object"
+    },
+    "PingFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ping",
+          "default": "ping",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "PingFrame",
+      "type": "object"
+    },
+    "PongEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "server_time": {
+          "format": "date-time",
+          "title": "Server Time",
+          "type": "string"
+        },
+        "type": {
+          "const": "pong",
+          "default": "pong",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_time"
+      ],
+      "title": "PongEvent",
+      "type": "object"
+    },
+    "PresenceBlock": {
+      "additionalProperties": false,
+      "description": "`PresenceMsg` 의 11필드 그대로. 이름이 바뀌지 않는다.",
+      "properties": {
+        "just_changed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Just Changed"
+        },
+        "last_activity_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Activity At"
+        },
+        "mv_current": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mv Current"
+        },
+        "mv_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mv Threshold"
+        },
+        "seconds_since_activity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seconds Since Activity"
+        },
+        "state": {
+          "enum": [
+            "present",
+            "absent"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "wander_baseline": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wander Baseline"
+        },
+        "wander_confirmed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wander Confirmed"
+        },
+        "wander_current": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wander Current"
+        },
+        "wander_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wander Ratio"
+        },
+        "wander_ratio_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wander Ratio Threshold"
+        }
+      },
+      "required": [
+        "state",
+        "updated_at"
+      ],
+      "title": "PresenceBlock",
+      "type": "object"
+    },
+    "SubscribeFrame": {
+      "additionalProperties": false,
+      "description": "빈 목록은 '스코프 내 전체'다. 스코프 밖 기기는 조용히 무시된다(존재 여부 노출 방지).",
+      "properties": {
+        "device_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Device Ids",
+          "type": "array"
+        },
+        "type": {
+          "const": "subscribe",
+          "default": "subscribe",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "SubscribeFrame",
+      "type": "object"
+    },
+    "UnsubscribeFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "device_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Device Ids",
+          "type": "array"
+        },
+        "type": {
+          "const": "unsubscribe",
+          "default": "unsubscribe",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "UnsubscribeFrame",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "WebSocket 프레임 계약. protocol_version 1. presence/fall 블록의 부재는 '감지 미동작'이며 '이상 없음'이 아니다.",
+  "properties": {
+    "clientFrame": {
+      "discriminator": {
+        "mapping": {
+          "auth": "#/$defs/AuthFrame",
+          "ping": "#/$defs/PingFrame",
+          "subscribe": "#/$defs/SubscribeFrame",
+          "unsubscribe": "#/$defs/UnsubscribeFrame"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AuthFrame"
+        },
+        {
+          "$ref": "#/$defs/SubscribeFrame"
+        },
+        {
+          "$ref": "#/$defs/UnsubscribeFrame"
+        },
+        {
+          "$ref": "#/$defs/PingFrame"
+        }
+      ]
+    },
+    "serverEvent": {
+      "discriminator": {
+        "mapping": {
+          "error": "#/$defs/ErrorEvent",
+          "hello": "#/$defs/HelloEvent",
+          "live": "#/$defs/LiveEvent",
+          "pong": "#/$defs/PongEvent"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/HelloEvent"
+        },
+        {
+          "$ref": "#/$defs/LiveEvent"
+        },
+        {
+          "$ref": "#/$defs/ErrorEvent"
+        },
+        {
+          "$ref": "#/$defs/PongEvent"
+        }
+      ]
+    }
+  },
+  "title": "WIFI-GUARD /ws/live",
+  "x-close-codes": {
+    "token_expired": 4001,
+    "unauthorized": 1008
+  },
+  "x-protocol-version": 1
+}

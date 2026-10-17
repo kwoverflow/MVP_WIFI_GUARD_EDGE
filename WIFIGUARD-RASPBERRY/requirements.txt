@@ -1,0 +1,8 @@
+# 엣지 공통 의존성 (개발 PC + 라즈베리파이).
+# pyproject.toml 의 base + mqtt 실행 의존성과 맞춘다.
+# wifiguard-contracts 는 통합 작업장의 로컬 패키지이므로 deploy/install.sh 가 별도로 설치한다.
+
+numpy>=1.26
+scipy>=1.14
+pyserial>=3.5
+paho-mqtt>=2.1

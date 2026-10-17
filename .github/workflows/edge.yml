@@ -1,0 +1,101 @@
+name: Pi5 source regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  public-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python tools/check-public-source.py
+      - run: python -m unittest discover -s tools/tests -v
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL_TEST: postgresql+psycopg://test:test-only@127.0.0.1:5432/wifiguard_test
+      JWT_SECRET: ci-test-only-secret-not-for-deployment-32-bytes
+      MQTT_HOST: ""
+      KAFKA_BOOTSTRAP: ""
+      TSDB_DSN: ""
+      LOCAL_EDGE_TOKEN: ""
+      MOBILE_PUSH_ENABLED: "0"
+      MOBILE_NATIVE_TEST_PUSH_ENABLED: "0"
+      MOBILE_PC_TEST_PUSH_ENABLED: "0"
+      SMTP_HOST: ""
+    defaults:
+      run:
+        working-directory: WIFIGUARD-BACKEND
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run pytest
+      - run: uv run python tools/export_openapi.py --check
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: WIFIGUARD-FRONTEND
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: WIFIGUARD-FRONTEND/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: node scripts/build-pi5.mjs
+  edge-software:
+    # Windows is a source regression host, NOT a Raspberry Pi emulator.
+    runs-on: windows-latest
+    env:
+      SSQ_GPU: "0"
+      SSQ_PARALLEL: "0"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      NUMBA_NUM_THREADS: "1"
+      MQTT_HOST: ""
+      KAFKA_BOOTSTRAP: ""
+      SMTP_HOST: ""
+      MOBILE_PUSH_ENABLED: "0"
+      MOBILE_NATIVE_TEST_PUSH_ENABLED: "0"
+      MOBILE_PC_TEST_PUSH_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install source-test environments, not a Pi5 runtime
+        shell: pwsh
+        run: |
+          uv venv .ci-full --python 3.12
+          uv pip install --python .ci-full/Scripts/python.exe -r WIFIGUARD-LOCAL-EDGE/deploy/onnx-runtime-requirements.txt -r WIFIGUARD-LOCAL-EDGE/deploy/pi5/backend-requirements.txt torch==2.14.1 onnx==1.20.1 pytest httpx cryptography
+          uv venv .ci-lean --python 3.12
+          uv pip install --python .ci-lean/Scripts/python.exe -r WIFIGUARD-LOCAL-EDGE/deploy/onnx-runtime-requirements.txt -r WIFIGUARD-LOCAL-EDGE/deploy/pi5/backend-requirements.txt pytest httpx cryptography
+      - name: Run Edge and Raspberry regression
+        shell: pwsh
+        run: |
+          $paths = @('WIFIGUARD-LOCAL-EDGE/src', 'WIFIGUARD-RASPBERRY/src', 'WIFIGUARD-BACKEND/packages/contracts/src', 'WIFIGUARD-BACKEND/packages/db/src', 'WIFIGUARD-BACKEND/services/api/src', 'WIFIGUARD-BACKEND/services/ingest/src', 'WIFIGUARD-BACKEND/services/notification/src', 'WIFIGUARD-BACKEND/services/csi-fall-segmentation/src')
+          $env:PYTHONPATH = ($paths | ForEach-Object { Join-Path $pwd $_ }) -join [IO.Path]::PathSeparator
+          $env:WIFIGUARD_LEAN_PYTHON = Join-Path $pwd '.ci-lean/Scripts/python.exe'
+          & .ci-full/Scripts/python.exe -m pytest WIFIGUARD-LOCAL-EDGE/tests -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .ci-lean/Scripts/python.exe -m pytest WIFIGUARD-RASPBERRY/tests -q

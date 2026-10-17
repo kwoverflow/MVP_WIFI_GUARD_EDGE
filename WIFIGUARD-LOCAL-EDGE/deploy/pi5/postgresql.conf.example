@@ -1,0 +1,13 @@
+# Starting budget for one sensor, few UI clients. Tune ONLY the Pi5 cluster.
+# Separate relational and Timescale databases in ONE native PostgreSQL instance.
+# Keep the existing DB separation; avoid two duplicated DB server processes.
+listen_addresses = '127.0.0.1'
+shared_buffers = '128MB'
+effective_cache_size = '512MB'
+work_mem = '4MB'
+maintenance_work_mem = '64MB'
+max_connections = 20
+statement_timeout = '3s'
+idle_in_transaction_session_timeout = '10s'
+shared_preload_libraries = 'timescaledb'
+# Keep fsync/synchronous_commit ON. Do not trade fall history durability for speed.

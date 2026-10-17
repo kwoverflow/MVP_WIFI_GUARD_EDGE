@@ -1,0 +1,7 @@
+local-output/
+.venv/
+.venv-onnx/
+*.npz
+*.pt
+*.onnx
+*.onnx.data

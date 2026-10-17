@@ -1,0 +1,36 @@
+[Unit]
+Description=WIFI-GUARD Pi5 CSI, original presence, FP32 model and local relay
+After=network.target wifiguard-pi5-api.service
+Wants=wifiguard-pi5-api.service
+Conflicts=wifiguard-pi5-onnx.service wifiguard-local-edge.service
+
+[Service]
+Type=simple
+User=wifiguard
+SupplementaryGroups=spi gpio
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE
+EnvironmentFile=/etc/wifiguard/pi5.env
+Environment=NUMBA_CACHE_DIR=/var/lib/wifiguard-pi5/numba-cache
+# Input-policy experiment: change to training-fixed in private pi5.env to revert.
+Environment=MODEL_CARRIER_SELECTION=q-top30
+Environment=PRESENCE_WANDER_STRIDE_SECONDS=1
+Environment=MODEL_STRIDE_SECONDS=0.5
+Environment=MODEL_THREADS=1
+ExecStartPre=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/python /opt/wifiguard/WIFIGUARD-LOCAL-EDGE/deploy/pi5/preflight.py
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/wifiguard-local-edge --backend onnx --model /opt/wifiguard/models/model-fp32.onnx --transport spi --stride-seconds ${MODEL_STRIDE_SECONDS} --presence-stride-seconds 0.5 --presence-wander-stride-seconds ${PRESENCE_WANDER_STRIDE_SECONDS} --model-carrier-selection ${MODEL_CARRIER_SELECTION} --threads ${MODEL_THREADS} --startup-calibration empty-room --backend-url http://127.0.0.1:8000 --output-dir /var/lib/wifiguard-pi5
+StateDirectory=wifiguard-pi5
+MemoryAccounting=true
+MemoryHigh=768M
+MemoryMax=1280M
+CPUAccounting=true
+CPUQuota=240%
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wifiguard-pi5
+
+[Install]
+WantedBy=multi-user.target

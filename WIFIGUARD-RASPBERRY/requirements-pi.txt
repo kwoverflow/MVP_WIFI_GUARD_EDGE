@@ -1,0 +1,6 @@
+# 라즈베리파이 실기 전용. WGSP Batch8 수집은 libgpiod와 spidev를 사용한다.
+# CWT/모델 추론 의존성은 클라우드 소관이므로 Pi에 설치하지 않는다.
+-r requirements.txt
+
+gpiod>=2.2.1
+spidev>=3.8

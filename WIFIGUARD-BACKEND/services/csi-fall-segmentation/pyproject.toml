@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "csi-fall-segmentation"
+version = "1.0.0"
+description = "In-house dual-branch temporal CSI fall segmentation model"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26,<3",
+  "scipy>=1.11,<2",
+  "ssqueezepy==0.6.6",
+  "torch>=2.6,<3",
+]
+
+[project.optional-dependencies]
+mlops = ["mlflow>=2.19,<4"]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+csi-fall-segmentation-train = "csi_fall_segmentation.training:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/csi_fall_segmentation"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

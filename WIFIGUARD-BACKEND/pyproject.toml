@@ -1,0 +1,37 @@
+[project]
+name = "wifiguard-backend"
+version = "0.1.0"
+description = "WIFI-GUARD 클라우드 백엔드 — uv workspace 루트 (가상 프로젝트)"
+requires-python = ">=3.12"
+dependencies = [
+  "wifiguard-api",
+  "wifiguard-ingest",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "httpx>=0.27",
+  # 신호 인코딩 왕복(비트 동등성) 검증용. 런타임 의존이 아니다 — contracts 는 numpy 를
+  # 함수 안에서 지연 import 하므로 API 서비스는 numpy 없이도 동작한다.
+  "numpy>=1.26",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+# model-serving/inference는 **의도적으로 제외**한다 — torch가 루트 uv sync와 CI를
+# 무겁게 만든다. 모델 경로는 `uv run --project services/inference ...`로 따로 다룬다.
+members = ["packages/db", "packages/contracts", "services/api", "services/ingest", "services/notification"]
+
+[tool.uv.sources]
+wifiguard-api = { workspace = true }
+wifiguard-db = { workspace = true }
+wifiguard-contracts = { workspace = true }
+wifiguard-ingest = { workspace = true }
+wifiguard-notify = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["packages/contracts/tests", "services/ingest/tests", "services/notification/tests", "services/api/tests"]
+addopts = "-q"

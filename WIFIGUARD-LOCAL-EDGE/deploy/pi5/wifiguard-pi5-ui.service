@@ -1,0 +1,23 @@
+[Unit]
+Description=WIFI-GUARD built PR frontend SSR (no development server)
+After=network.target wifiguard-pi5-api.service
+
+[Service]
+Type=simple
+User=wifiguard
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-FRONTEND
+ExecStart=/usr/bin/node --max-old-space-size=192 scripts/serve-pi5.mjs
+MemoryAccounting=true
+MemoryHigh=192M
+MemoryMax=320M
+CPUAccounting=true
+CPUQuota=50%
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

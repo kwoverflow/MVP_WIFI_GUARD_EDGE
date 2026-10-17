@@ -1,0 +1,27 @@
+[Unit]
+Description=WIFI-GUARD authenticated GUI control and runtime configuration sync
+After=network.target wifiguard-pi5-api.service
+Wants=wifiguard-pi5-api.service
+
+[Service]
+Type=simple
+User=wifiguard
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE
+EnvironmentFile=/etc/wifiguard/pi5.env
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/python -m wifiguard_local_edge.control
+StateDirectory=wifiguard-pi5
+UMask=0077
+MemoryAccounting=true
+MemoryMax=128M
+CPUAccounting=true
+CPUQuota=15%
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wifiguard-pi5
+
+[Install]
+WantedBy=multi-user.target

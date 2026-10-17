@@ -1,0 +1,22 @@
+# Native API dependencies, no model training, Kafka JVM, Docker, MLflow or CUDA.
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+websockets>=13,<17
+pyjwt>=2.9,<3
+argon2-cffi>=23.1,<26
+psycopg[binary]>=3.2,<4
+sqlalchemy>=2.0.36,<3
+alembic>=1.14,<2
+python-dotenv>=1,<2
+# FCM HTTP v1 transport; server-only credentials are configured after installation.
+google-auth[requests]>=2.40,<3
+# Locked local package build backends, so editable installs need no hidden resolver.
+hatchling>=1.27,<2
+editables>=0.5,<1
+setuptools>=68,<83
+wheel>=0.45,<1
+pydantic>=2.10,<3
+paho-mqtt>=2.1,<3
+kafka-python>=2.1,<3
+# These last two small libraries keep imports compatible with the PR. Neither
+# broker is started and Kafka/MQTT connection settings MUST remain empty.

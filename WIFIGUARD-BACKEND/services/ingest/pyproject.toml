@@ -1,0 +1,20 @@
+[project]
+name = "wifiguard-ingest"
+version = "0.1.0"
+description = "WIFI-GUARD 인제스트 — MQTT→Kafka 브리지, Kafka 컨슈머, 최신값 캐시, WS 팬아웃 허브"
+requires-python = ">=3.12"
+dependencies = [
+  "wifiguard-contracts",
+  "wifiguard-db",
+  "wifiguard-notify",
+  "paho-mqtt>=2.1",
+  "kafka-python>=2.1",
+  "psycopg[binary]>=3.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wifiguard_ingest"]

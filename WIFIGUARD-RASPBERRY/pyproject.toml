@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wifiguard-edge"
+version = "0.1.0"
+description = "WIFI-GUARD 엣지 게이트웨이 — CSI 수집 · 재실감지 · PCA 합성 대표신호 · MQTT 업링크"
+requires-python = ">=3.11"
+
+# Pi 최소 집합. CWT(ssqueezepy·numba)는 D1 으로 클라우드로 넘어갔으므로 여기 없다 —
+# 엣지가 담당하는 `extract_window_signal` 경로는 numpy(SVD·convolve)와 scipy 뿐이다.
+# 이 분리로 numba/llvmlite 의 linux-aarch64 휠 리스크가 Pi 에서 사라진다.
+# pyserial 은 기존 UART 경로를 계속 지원하므로 base 에 둔다(순수 파이썬 ~300KB).
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.14",
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+# 클라우드 업링크. wifiguard-contracts 는 4레포 스키마 SSOT (아래 tool.uv.sources 참조).
+mqtt = ["paho-mqtt>=2.1", "wifiguard-contracts"]
+# 라즈베리파이 실기 GPIO/SPI. WGSP Batch8은 이 extra가 필요하다.
+pi = ["gpiod>=2.2.1", "spidev>=3.8"]
+# CWT — 클라우드 모델서버와 개발 PC 벤치 전용. Pi 에는 설치하지 않는다.
+cwt = ["numba>=0.61", "ssqueezepy==0.6.6"]
+dev = ["pytest>=8.3"]
+
+[project.scripts]
+wifiguard-edge = "wifiguard_edge.__main__:main"
+
+# 모노레포 4폴더가 항상 같은 부모(MVP_WIFI_GUARD/) 아래라는 것이 확정 사실이라 상대 경로가 유효하다.
+[tool.uv.sources]
+wifiguard-contracts = { path = "../WIFIGUARD-BACKEND/packages/contracts", editable = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

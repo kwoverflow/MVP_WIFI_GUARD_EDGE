@@ -1,0 +1,18 @@
+[project]
+name = "wifiguard-contracts"
+version = "0.1.0"
+description = "WIFI-GUARD 레포 간 스키마 SSOT — REST/MQTT/Kafka/WS Pydantic v2 모델"
+# 3.11 이다. 다른 백엔드 패키지(db·api)는 3.12 지만 이 패키지는 **엣지도 설치한다** —
+# 라즈베리파이 OS Bookworm 의 시스템 파이썬이 3.11 이라 엣지가 requires-python >=3.11 이고,
+# 계약이 3.12 를 요구하면 Pi 에 설치할 수 없다. 3.12 전용 구문(PEP 695 등)은 쓰지 않는다.
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wifiguard_contracts"]

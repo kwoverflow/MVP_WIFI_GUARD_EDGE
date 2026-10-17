@@ -1,0 +1,31 @@
+[Unit]
+Description=WIFI-GUARD original PR backend, local ingest and notifications
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=wifiguard
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-BACKEND
+EnvironmentFile=/etc/wifiguard/pi5.env
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/uvicorn wifiguard_api.app:app --host 127.0.0.1 --port 8000 --workers 1 --no-proxy-headers --limit-concurrency 24
+MemoryAccounting=true
+MemoryHigh=256M
+MemoryMax=512M
+CPUAccounting=true
+CPUQuota=100%
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+StateDirectory=wifiguard-pi5
+ReadWritePaths=/var/lib/wifiguard-pi5
+Environment=PI5_CONTROL_ENABLED=1
+Environment=PI5_STATE_DIR=/var/lib/wifiguard-pi5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+[Unit]
+Description=WIFI-GUARD Pi5 standalone same-model ONNX inference
+After=local-fs.target
+
+[Service]
+Type=simple
+User=wifiguard
+SupplementaryGroups=spi gpio
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE
+Environment=NUMBA_CACHE_DIR=/var/lib/wifiguard-local-edge/numba-cache
+Environment=ORT_DISABLE_TELEMETRY=1
+# FP32 is deliberate: current full INT8 candidate failed output regression.
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/wifiguard-local-edge --backend onnx --model /opt/wifiguard/models/model-fp32.onnx --transport spi --stride-seconds 0.5 --threads 1 --output-dir /var/lib/wifiguard-local-edge
+# Budget for a Pi5 4GB unit. Verify actual paths, user and Pi5 RAM before enabling.
+MemoryAccounting=true
+MemoryHigh=1536M
+MemoryMax=2G
+CPUAccounting=true
+CPUQuota=400%
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wifiguard-local-edge
+StateDirectory=wifiguard-local-edge
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=WIFI-GUARD local CSI CPU inference
+After=local-fs.target
+
+[Service]
+Type=simple
+User=wifiguard
+SupplementaryGroups=spi gpio
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE
+Environment=STRIDE_SECONDS=0.25
+Environment=CPU_THREADS=2
+EnvironmentFile=-/etc/wifiguard-local-edge.env
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv/bin/wifiguard-local-edge --checkpoint /opt/wifiguard/WIFIGUARD-BACKEND/weights/temporal_segmentation_fixed_delay.pt --stride-seconds ${STRIDE_SECONDS} --threads ${CPU_THREADS} --output-dir /var/lib/wifiguard-local-edge
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wifiguard-local-edge
+StateDirectory=wifiguard-local-edge
+Environment=NUMBA_CACHE_DIR=/var/lib/wifiguard-local-edge/numba-cache
+
+[Install]
+WantedBy=multi-user.target

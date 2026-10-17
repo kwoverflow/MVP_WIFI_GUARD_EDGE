@@ -1,0 +1,9 @@
+# Native CPU runtime only. Export/training use the separate full environment.
+numpy==2.4.6
+scipy==1.18.1
+ssqueezepy==0.6.6
+numba==0.65.1
+psutil==7.2.2
+threadpoolctl==3.6.0
+pyserial==3.5
+onnxruntime==1.23.2
