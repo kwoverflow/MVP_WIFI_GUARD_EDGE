@@ -24,12 +24,15 @@ class AmplitudeBuffer:
         self._raw_ts = self._last_seq = None
         self._offset = 0
         self.last_host_time = self.last_rssi = 0.0
+        self._continuous_since = None
+        self.input_gap_events = 0
 
     def reset(self):
         with self._lock:
             self._head = self._count = 0
             self._raw_ts = self._last_seq = None
             self._offset = 0
+            self._continuous_since = None
             self.device_resets += 1
 
     def resize_seconds(self, seconds):
@@ -63,6 +66,7 @@ class AmplitudeBuffer:
                 self._count = self._head = self._offset = 0
                 self._raw_ts = self._last_seq = None
                 self.device_resets += 1
+                self._continuous_since = None
             if self._raw_ts is not None and frame.timestamp_us < self._raw_ts:
                 if self._raw_ts - frame.timestamp_us > (1 << 31):
                     self._offset += 1 << 32
@@ -70,10 +74,19 @@ class AmplitudeBuffer:
                     self._count = self._head = self._offset = 0
                     self._last_seq = None
                     self.device_resets += 1
+                    self._continuous_since = None
             if self._last_seq is not None:
                 self.sequence_gaps += max(0, frame.seq - self._last_seq - 1)
+            timestamp = (frame.timestamp_us + self._offset) / 1e6
+            if self._count and self._continuous_since is not None:
+                delta = timestamp - self.times[(self._head - 1) % self.capacity]
+                if delta <= 0 or delta > .02:
+                    self.input_gap_events += 1
+                    self._continuous_since = timestamp
+            if self._continuous_since is None:
+                self._continuous_since = timestamp
             self._raw_ts, self._last_seq = frame.timestamp_us, frame.seq
-            self.times[self._head] = (frame.timestamp_us + self._offset) / 1e6
+            self.times[self._head] = timestamp
             self.amps[self._head] = values
             self._head = (self._head + 1) % self.capacity
             self._count = min(self._count + 1, self.capacity)
@@ -84,12 +97,32 @@ class AmplitudeBuffer:
         with self._lock:
             if not self._count:
                 return None
-            indices = (
-                np.arange(self._count) + self._head - self._count
-            ) % self.capacity
-            times = self.times[indices]
-            recent = times >= times[-1] - seconds
-            return times[recent].copy(), self.amps[indices[recent]].copy()
+            # Search the two monotonic physical spans; do not materialize the
+            # entire 18-second ring or copy the selected amplitude data twice.
+            # Keep the exact inclusive timestamp selection and owned snapshots.
+            cutoff = self.times[(self._head - 1) % self.capacity] - seconds
+            spans = self._recent_spans(cutoff, side='left')
+            return (np.concatenate([self.times[a:b] for a,b in spans]),
+                    np.concatenate([self.amps[a:b] for a,b in spans]))
+
+    def _recent_spans(self, cutoff, *, side):
+        """Called with the ring lock held. Each returned span is monotonic."""
+        oldest = (self._head - self._count) % self.capacity
+        end = min(self.capacity, oldest + self._count)
+        spans = [(oldest,end)]
+        remaining = self._count - (end-oldest)
+        if remaining:
+            spans.append((0,remaining))
+        return [(a + int(np.searchsorted(self.times[a:b],cutoff,side=side)),b) for a,b in spans]
+
+    def model_window_status(self):
+        """Wait for a full clean window; never interpolate across a rejected gap."""
+        with self._lock:
+            span = (self.times[(self._head-1) % self.capacity]-self._continuous_since
+                    if self._count and self._continuous_since is not None else 0.)
+            return {'ready':bool(span >= 3.02),'continuous_seconds':max(0.,float(span)),
+                    'gap_events':self.input_gap_events,
+                    'reason':'recovering_after_gap' if self.input_gap_events else 'warming_up'}
 
     def stats(self):
         with self._lock:
@@ -99,16 +132,14 @@ class AmplitudeBuffer:
                 last = self.times[(self._head - 1) % self.capacity]
                 first = self.times[(self._head - self._count) % self.capacity]
                 span = max(0.0, last - first)
-                indices = (
-                    np.arange(self._count) + self._head - self._count
-                ) % self.capacity
-                hz = float(np.sum(self.times[indices] > last - 1.0))
+                hz = float(sum(b-a for a,b in self._recent_spans(last-1.,side='right')))
             return {
                 "buffered_frames": self._count,
                 "buffered_seconds": span,
                 "total_frames": self.total_frames,
                 "device_resets": self.device_resets,
                 "sequence_gaps": self.sequence_gaps,
+                "input_gap_events": self.input_gap_events,
                 "hz_1s": hz,
                 "last_rssi": self.last_rssi,
                 "frame_age_seconds": max(0.0, time.monotonic() - self.last_host_time),
@@ -151,6 +182,6 @@ def prepare_window(times, amplitude, fs_hz=320.0, max_gap_seconds=0.02, *, expec
     if len(grid) < int(round(3 * fs_hz)):
         raise ValueError("3 seconds of CSI are required")
     grid = grid[-int(round(3 * fs_hz)) :]
-    return np.stack(
-        [np.interp(grid, times, amplitude[:, i]) for i in range(expected_channels)], axis=1
-    ).astype(np.float32)
+    from .interpolation import interpolate_carriers
+
+    return interpolate_carriers(times, amplitude, grid)

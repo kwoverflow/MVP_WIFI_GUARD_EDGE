@@ -6,6 +6,12 @@ on:
 permissions:
   contents: read
 jobs:
+  public-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python tools/check-public-source.py
+      - run: python -m unittest discover -s tools/tests -v
   backend:
     runs-on: ubuntu-latest
     services:
@@ -27,6 +33,8 @@ jobs:
       TSDB_DSN: ""
       LOCAL_EDGE_TOKEN: ""
       MOBILE_PUSH_ENABLED: "0"
+      MOBILE_NATIVE_TEST_PUSH_ENABLED: "0"
+      MOBILE_PC_TEST_PUSH_ENABLED: "0"
       SMTP_HOST: ""
     defaults:
       run:
@@ -68,6 +76,8 @@ jobs:
       KAFKA_BOOTSTRAP: ""
       SMTP_HOST: ""
       MOBILE_PUSH_ENABLED: "0"
+      MOBILE_NATIVE_TEST_PUSH_ENABLED: "0"
+      MOBILE_PC_TEST_PUSH_ENABLED: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

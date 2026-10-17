@@ -203,6 +203,9 @@ def command(body: CommandIn, scope: Scope = Depends(get_scope), db: Session = De
     if not scope.can_edit_config():
         raise forbidden()
     dev = local_device(db, scope, body.device_id)
+    if body.action in ("start", "recalibrate"):
+        from .local_network import require_network_ready
+        require_network_ready()
     agent = read_state("control-agent.json") or {}
     if not fresh(agent, 10):
         raise ApiError(503, "CONTROL_AGENT_OFFLINE", "Pi5 제어 서비스가 응답하지 않습니다.")

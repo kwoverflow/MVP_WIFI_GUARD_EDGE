@@ -60,7 +60,7 @@ def distribution(values):
     }
 
 
-def atomic_json(path, data):
+def atomic_json(path, data, *, indent=2):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Windows readers can briefly hold the destination open. Use a unique
@@ -70,7 +70,7 @@ def atomic_json(path, data):
     temporary = Path(name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as output:
-            json.dump(data, output, ensure_ascii=False, indent=2)
+            json.dump(data, output, ensure_ascii=False, indent=indent)
         for attempt in range(8):
             try:
                 temporary.replace(path)

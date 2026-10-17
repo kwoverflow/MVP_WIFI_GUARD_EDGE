@@ -20,6 +20,8 @@ from .metrics import (
     host_info,
 )
 from .presence_gate import PresenceInferencePaused
+from .diagnostics import CaptureDiagnostics, LoopDiagnostics, StreamDiagnostics
+from .status_writer import LatestStatusWriter
 
 
 def predict_window(
@@ -46,10 +48,12 @@ def predict_window(
     if integration:
         integration.require_gate(lease)
     decision = trigger.update(probability)
+    postprocessed = time.perf_counter()
     stages = {
         "prepare": (preprocessed - tick) * 1000,
         "features": (featured - preprocessed) * 1000,
         "inference": (inferred - featured) * 1000,
+        "postprocess": (postprocessed - inferred) * 1000,
         **builder.last_timings_ms,
     }
     if integration:
@@ -61,6 +65,7 @@ def predict_window(
             frame_age + (time.perf_counter() - tick),
             lease=lease,
         )
+    stages["durable_publish"] = (time.perf_counter() - postprocessed) * 1000
     return probability, decision, stages
 
 
@@ -69,12 +74,18 @@ def find_gpio_chip(explicit=None):
 
     paths = [Path(explicit)] if explicit else sorted(Path("/dev").glob("gpiochip*"))
     for path in paths:
-        with gpiod.Chip(str(path)) as chip:
-            if (
-                chip.get_info().num_lines > 25
-                and chip.get_line_info(25).name == "GPIO25"
-            ):
-                return str(path)
+        try:
+            with gpiod.Chip(str(path)) as chip:
+                if (
+                    chip.get_info().num_lines > 25
+                    and chip.get_line_info(25).name == "GPIO25"
+                ):
+                    return str(path)
+        except PermissionError:
+            # Pi5 exposes non-header controllers that the service intentionally
+            # cannot access. Auto-discovery must continue to the allowed RP1 chip.
+            if explicit:
+                raise
     raise RuntimeError(
         "GPIO25 header line was not found; inspect gpiodetect and use --gpio-chip"
     )
@@ -91,10 +102,20 @@ def spi_source(buffer, args):
         )
 
     class LocalSource(WgspBatch8Source):
+        def __init__(self, *values, **options):
+            super().__init__(*values, **options)
+            self.diagnostics = StreamDiagnostics()
+            self.capture_diagnostics = CaptureDiagnostics()
+
+        def _observe_batch(self, timing):
+            self.capture_diagnostics.observe(timing)
+
         def _append(self, frame):
             if self._last_epoch is not None and self._last_epoch != frame.stream_epoch:
                 self.buffer.reset()
             super()._append(frame)
+            if frame.usable_for_preprocessing:
+                self.diagnostics.observe(frame, self._current_batch_timing)
 
         def status(self):
             return {
@@ -103,6 +124,8 @@ def spi_source(buffer, args):
                 "protocol_resyncs": self._protocol_resyncs,
                 "transport_errors": self._transport_errors,
                 "reject_reasons": dict(self._reject_reasons),
+                "diagnostics": self.diagnostics.status(),
+                "capture_timing": self.capture_diagnostics.status(),
             }
 
     config = TransportConfig(
@@ -145,6 +168,7 @@ def run(args):
     logger.addHandler(handler)
     sampler = ResourceSampler()
     sampler.start()
+    status_writer = LatestStatusWriter(args.output_dir / "status.json")
     source = None
     integration = None
     timings, stage_times = [], {}
@@ -161,8 +185,12 @@ def run(args):
         "presence_gated_ticks": 0,
         "presence_suppressed_results": 0,
         "presence_session_resets": 0,
+        "input_wait_ticks": 0,
+        "steady_input_wait_ticks": 0,
+        "steady_input_gap_events": 0,
     }
     result = {}
+    diagnostics = LoopDiagnostics()
     last_window_error = None
     try:
         with threadpool_limits(limits=1, user_api="blas"):
@@ -182,6 +210,11 @@ def run(args):
             builder = CpuEdgeFeatureBuilder()
             builder.warmup()
             engine.warmup()
+            from .interpolation import warmup as warmup_interpolation
+
+            # Compile before opening capture; first inference must not JIT while
+            # the receiver's small hardware queue is filling.
+            warmup_interpolation()
             startup_seconds = time.perf_counter() - startup
             if getattr(args, "backend_url", None):
                 from .pi5 import Pi5Integration
@@ -208,6 +241,7 @@ def run(args):
             deadline = started
             last_decision = None
             last_gate_generation = None
+            last_input_gap_events = 0
             source.start()
             if integration:
                 integration.start(source)
@@ -240,9 +274,13 @@ def run(args):
                     integration.apply_runtime_configuration(engine, trigger)
                 stats = buffer.stats()
                 gate = integration.inference_gate() if integration else None
+                input_state = buffer.model_window_status() if hasattr(buffer, "model_window_status") else {"ready": True, "gap_events": 0}
+                if counters["inferences"]:
+                    counters["steady_input_gap_events"] += max(0, input_state["gap_events"] - last_input_gap_events)
+                last_input_gap_events = input_state["gap_events"]
                 # No model-window copies or feature/model work while the gate is closed.
                 window = None
-                if gate is None or gate["open"]:
+                if (gate is None or gate["open"]) and input_state["ready"]:
                     window = (buffer.get_model_window(3.02, selection_mode)
                               if selection_mode == "q-top30"
                               else buffer.get_model_window(3.02))
@@ -274,6 +312,11 @@ def run(args):
                     counters["presence_gated_ticks"] += 1
                     integration.gate.record_skip(gate["reason"])
                     reset_trigger = True
+                elif not input_state["ready"]:
+                    counters["input_wait_ticks"] += 1
+                    if counters["inferences"]:
+                        counters["steady_input_wait_ticks"] += 1
+                    reset_trigger = True
                 elif (
                     window is None
                     or stats["frame_age_seconds"] > 0.1
@@ -291,6 +334,7 @@ def run(args):
                         if counters["inferences"]:
                             counters["steady_invalid_windows"] += 1
                         last_window_error = str(exc)
+                        diagnostics.rejected_window(window, exc, source.status())
                         reset_trigger = True
                     else:
                         last_window_error = None
@@ -342,11 +386,14 @@ def run(args):
                             timings.append(total_ms)
                             if total_ms > args.stride_seconds * 1000:
                                 counters["deadline_misses"] += 1
+                                diagnostics.record("processing_deadline_miss", total_ms=total_ms,
+                                                   stages_ms=dict(stages), source=source.status())
                             last_decision = {
                                 "probability": probability,
                                 "decision": decision,
                                 "source_center_seconds": last_timestamp - 1.5,
                                 "total_processing_ms": total_ms,
+                                "stages_ms": dict(stages),
                             }
                 if reset_trigger:
                     trigger.reset()
@@ -372,6 +419,7 @@ def run(args):
                     "model_fixed_delay_seconds": 1.5,
                     "model_version": engine.model_version,
                     "backend": args.backend,
+                    "model_threads": args.threads,
                     "model_carrier_selection": preparer.last_selection,
                     "resource_budget": budget,
                     "host": host_info(),
@@ -380,12 +428,17 @@ def run(args):
                     "source": source.status(),
                     "processing_ms": distribution(timings),
                     "last_window_error": last_window_error,
+                    "diagnostics": diagnostics.status(),
+                    "input_window": input_state,
                     "stage_ms": {k: distribution(v) for k, v in stage_times.items()},
                     "resources": sampler.snapshot(),
+                    "status_writer": status_writer.status(),
                     "last_result": last_decision,
                     "pi5_services": integration.status() if integration else None,
                 }
-                atomic_json(args.output_dir / "status.json", result)
+                # Live monitoring may coalesce snapshots, never durable model
+                # results. FULL-synchronous relay.offer above is still blocking.
+                status_writer.publish(result)
                 if args.verbose:
                     print(json.dumps(result), flush=True)
                 deadline += args.stride_seconds
@@ -398,6 +451,9 @@ def run(args):
                     previous_alarm = False
                     counters["trigger_resets"] += 1
             result["counters"] = dict(counters)
+            # Drain before the final synchronous stopped/failure record so an
+            # older live snapshot can never overwrite the final status.
+            status_writer.close()
             result["event"] = "local_edge_stopped"
             result["running"] = False
             result["input_current"] = False
@@ -416,6 +472,8 @@ def run(args):
                 and counters["skipped_deadlines"] == 0
                 and counters["steady_invalid_windows"] == 0
                 and counters["steady_stale_windows"] == 0
+                and counters["steady_input_wait_ticks"] == 0
+                and counters["steady_input_gap_events"] == 0
             )
             result["pi5_hardware_timing_gate_passed"] = bool(
                 host_info()["pi5_hardware"] and result["live_timing_gate_passed"]
@@ -449,6 +507,12 @@ def run(args):
                 else 2
             )
     except Exception as exc:
+        try:
+            status_writer.close()
+        except Exception:
+            # Preserve the original failure and still attempt a stopped record.
+            # The finalizer must release capture/relay even after a disk error.
+            pass
         failure = {
             **result,
             "event": "local_edge_failed",
@@ -460,6 +524,10 @@ def run(args):
         atomic_json(args.output_dir / "summary.json", failure)
         raise
     finally:
+        try:
+            status_writer.close()
+        except Exception:
+            logger.exception("live status writer shutdown failed")
         if integration is not None:
             integration.stop()
         if source is not None:

@@ -22,10 +22,18 @@ UNITS = {"edge": "wifiguard-pi5-edge.service", "api": "wifiguard-pi5-api.service
          "monitor": "wifiguard-pi5-monitor.service"}
 
 
+def monitored_units():
+    units = dict(UNITS)
+    if os.getenv("PI5_WIFI_ENABLED") == "1":
+        units.update(network="wifiguard-pi5-network.service", network_manager="NetworkManager.service",
+                     wifi_supplicant="wpa_supplicant.service")
+    return units
+
+
 class LiveStackMonitor:
     def __init__(self, directory, *, units=None, group_reader=service_group,
                  counter_reader=None, clock=time.monotonic):
-        self.directory, self.units = Path(directory), dict(units or UNITS)
+        self.directory, self.units = Path(directory), dict(units or monitored_units())
         self.group_reader = group_reader
         self.counter_reader = counter_reader or (lambda path: read_cgroup("/sys/fs/cgroup", path))
         self.clock, self.previous = clock, {}
@@ -70,7 +78,8 @@ class LiveStackMonitor:
         stamp = edge.get("updated_at_unix")
         edge_age = max(0, time.time() - stamp) if isinstance(stamp, (int, float)) and math.isfinite(stamp) else None
         value = {"updated_at_unix": time.time(), "complete": complete, "errors": errors,
-                 "scope": "edge + API + UI + PostgreSQL/Timescale + nginx + control + monitor",
+                 "scope": "edge + API + UI + PostgreSQL/Timescale + nginx + control + monitor" +
+                          (" + Wi-Fi broker + NetworkManager + wpa_supplicant" if "network" in self.units else ""),
                  "memory_method": "sum of distinct cgroup memory.current including charged file cache; not RSS",
                  "cpu_count": cpus, "groups": groups,
                  "total": {"cpu_percent_one_core_basis": total_cpu,
@@ -95,7 +104,7 @@ def main(argv=None):
     if args.interval < 1:
         parser.error("monitor interval must be >= 1 second")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    monitor = LiveStackMonitor(args.output_dir, units={**UNITS, "database": args.postgres_unit})
+    monitor = LiveStackMonitor(args.output_dir, units={**monitored_units(), "database": args.postgres_unit})
     stop = threading.Event()
     import signal
     for sig in (signal.SIGINT, signal.SIGTERM):

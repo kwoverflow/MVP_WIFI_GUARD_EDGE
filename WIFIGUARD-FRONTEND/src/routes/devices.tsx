@@ -8,6 +8,7 @@ import { useCreateDevice, useDeleteDevice, useUpdateDevice } from "@/api/mutatio
 import { useDevices } from "@/api/queries";
 import { LinkStatusPanel } from "@/components/LinkStatusPanel";
 import { Pi5LocalPanel } from "@/components/Pi5LocalPanel";
+import { Pi5WifiPanel } from "@/components/Pi5WifiPanel";
 import { localEdgeCommand } from "@/api/local-edge";
 import { USE_MOCK } from "@/api/client";
 import { usePresentation } from "@/components/usePresentation";
@@ -151,6 +152,7 @@ function DevicesPage() {
         </div>
 
         <Pi5LocalPanel compact deviceId={selected?.id} canBind={selected?.connection === "SPI"} />
+        <Pi5WifiPanel />
         <details className="technical-disclosure">
           <summary>연결 상세</summary>
           <div className="technical-content">

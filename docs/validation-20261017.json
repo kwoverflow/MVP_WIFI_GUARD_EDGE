@@ -1,0 +1,68 @@
+{
+  "kind": "pi5-public-source-refresh-validation",
+  "date": "2026-10-17",
+  "destination": "kwoverflow/MVP_WIFI_GUARD_EDGE:main",
+  "pull_request": "https://github.com/kwoverflow/MVP_WIFI_GUARD_EDGE/pull/1",
+  "branch": "codex/pi5-edge-release-20261015",
+  "previous_published_commit": "8a477fac3624e42693546ed91ab5d89b52c4b07a",
+  "reason_main_only_has_readme": "Existing PR is OPEN and unmerged; actual source is on its head branch",
+  "host": "Windows x86_64 / Python 3.12 / Node 24.19.0",
+  "regression": {
+    "backend": {"passed": 187, "failed": 0, "skipped": 0},
+    "edge": {"passed": 271, "failed": 0, "skipped": 0},
+    "raspberry": {"passed": 110, "failed": 0, "skipped": 0},
+    "frontend": {"passed": 98, "failed": 0, "skipped": 0},
+    "public_source_guard": {"passed": 6, "failed": 0, "skipped": 0},
+    "unique_total": 672,
+    "isolated_postgresql_test_database": true,
+    "real_notification_transport": false,
+    "typescript": "PASS",
+    "openapi_snapshot": "PASS",
+    "operating_ui_build_and_export": "PASS",
+    "exported_ui_ssr_and_brand_asset_http": "PASS"
+  },
+  "runtime_defaults": {
+    "model_stride_seconds": 0.5,
+    "model_threads": 1,
+    "carrier_selection": "q-top30",
+    "precision": "fp32",
+    "absence_grace_seconds": 10,
+    "wifi_gui_enabled": false,
+    "external_notifications_enabled": false,
+    "native_manual_push_maximum_seconds": 43200,
+    "private_handoff_manual_push_seconds": 28800,
+    "model_architecture_or_weights_changed": false,
+    "new_result_durable_write": "SQLite WAL + FULL before accepting a result",
+    "ack_cleanup": "Separate NORMAL connection; replay is deduplicated by backend",
+    "invalid_input_window_not_silently_interpolated": true,
+    "docker_kafka_mlops_required_on_pi5": false
+  },
+  "public_distribution": {
+    "credentials_included": false,
+    "encrypted_credentials_included": false,
+    "password_or_phone_tokens_included": false,
+    "database_sensor_data_or_firmware_included": false,
+    "weights_apk_built_ui_or_dependency_wheels_included": false,
+    "git_index_guard_added_to_ci": true,
+    "known_private_values_compared_locally_without_disclosure": true,
+    "guard_is_not_a_complete_secret_detection_guarantee": true
+  },
+  "ci": {
+    "jobs": ["public-source", "backend", "web", "edge-software"],
+    "remote_result_source": "Latest GitHub checks for the current PR head; independent from local counts above",
+    "windows_edge_job_is_pi5_emulation": false
+  },
+  "not_verified_this_refresh": [
+    "Reinstallation of the updated package on a physical Pi5",
+    "Native ARM64 full-stack throughput, resource and thermal stability for this commit",
+    "Teammate phone registration and actual FCM receipt",
+    "Private handoff systemd expiry timer on physical Pi5",
+    "Real fall/non-fall accuracy and q-top30 policy equivalence"
+  ],
+  "hardware_contacted_this_task": false,
+  "external_notifications_sent": false,
+  "original_team_pr_modified": false,
+  "cloud_personal_pr_modified": false,
+  "automatically_merged": false,
+  "published_history_rewritten": false
+}

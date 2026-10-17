@@ -26,6 +26,7 @@ log = logging.getLogger("notifier.mobile")
 TTL_SECONDS = 600
 MAX_ATTEMPTS = 5
 MAX_PC_TEST_SECONDS = 3600
+MAX_NATIVE_TEST_SECONDS = 12 * 3600
 
 
 def enabled() -> bool:
@@ -44,7 +45,19 @@ def pc_test_push_enabled() -> bool:
 
 
 def test_push_enabled() -> bool:
-    return enabled() or pc_test_push_enabled()
+    return enabled() or pc_test_push_enabled() or native_test_push_enabled()
+
+
+def native_test_push_enabled() -> bool:
+    """Explicit expiring TEST-only grant, without changing the real sensor mode."""
+    if (os.getenv("PC_SIMULATION_MODE") == "1" or os.getenv("MOBILE_PUSH_ENABLED") == "1"
+            or os.getenv("MOBILE_NATIVE_TEST_PUSH_ENABLED") != "1"):
+        return False
+    try:
+        remaining = float(os.getenv("MOBILE_NATIVE_TEST_PUSH_EXPIRES_AT", "")) - time.time()
+        return math.isfinite(remaining) and 0 < remaining <= MAX_NATIVE_TEST_SECONDS
+    except (ValueError, TypeError):
+        return False
 
 
 def authorized(installation, user, fall=None) -> bool:
@@ -165,6 +178,11 @@ class MobilePushWorker(threading.Thread):
             elif os.getenv("PC_SIMULATION_MODE") == "1" and not (
                     pc_test_push_enabled() and row.kind == "TEST" and row.fall_event_id is None):
                 row.state, row.last_error = "REVOKED", "PC_EXTERNAL_PUSH_BLOCKED"
+            elif not test_push_enabled():
+                row.state, row.last_error = "REVOKED", "PUSH_DISABLED_OR_EXPIRED"
+            elif not enabled() and not ((native_test_push_enabled() or pc_test_push_enabled())
+                                       and row.kind == "TEST" and row.fall_event_id is None):
+                row.state, row.last_error = "REVOKED", "PUSH_MANUAL_TEST_ONLY"
             else:
                 row.attempts += 1
                 data = {"deliveryId": str(row.id), "installationId": str(installation.installation_id),

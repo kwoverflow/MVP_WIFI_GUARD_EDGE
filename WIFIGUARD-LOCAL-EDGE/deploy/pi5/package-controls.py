@@ -45,6 +45,7 @@ def main():
         "wifiguard-pi5-monitor.service", "wifiguard-pi5-ui.service",
         "notification-preflight.py", "verify-release.py", "package-release.py", "RELEASE.md",
         "gpio-requirements.txt", "requirements-gpio.lock",
+        "prepare-network.sh", "open-wifi-gui.ps1", "wifiguard-pi5-network.service",
     }
     for name in sorted(profile_names):
         path = profile / name

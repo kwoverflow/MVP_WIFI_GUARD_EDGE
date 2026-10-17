@@ -102,6 +102,8 @@ def create_app() -> FastAPI:
     from .routers.local_control import router as control_router, internal_router
     app.include_router(control_router, prefix=API_PREFIX)
     app.include_router(internal_router)
+    from .routers.local_network import router as network_router
+    app.include_router(network_router, prefix=API_PREFIX)
     from .routers.pc_simulation import router as pc_simulation_router
     app.include_router(pc_simulation_router, prefix=API_PREFIX)
 

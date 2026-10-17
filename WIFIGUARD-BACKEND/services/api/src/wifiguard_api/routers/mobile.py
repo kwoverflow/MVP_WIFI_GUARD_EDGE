@@ -65,7 +65,8 @@ def own_installation(db, scope, installation_id, *, lock=False):
 @router.get("/config")
 def config(scope: Scope = Depends(get_scope)):
     return {"pushEnabled": test_push_enabled(), "provider": "fcm", "androidPackage": "com.wifiguard.mobile",
-            "automaticFallPushEnabled": enabled(), "testOnly": os.getenv("PC_SIMULATION_MODE") == "1",
+            "automaticFallPushEnabled": enabled(),
+            "testOnly": os.getenv("PC_SIMULATION_MODE") == "1" or (test_push_enabled() and not enabled()),
             "firebaseProjectId": os.getenv("FCM_PROJECT_ID", "") if test_push_enabled() else "",
             "requiresFirebaseClientConfig": True}
 

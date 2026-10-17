@@ -140,6 +140,13 @@ def test_offline_default_config_does_not_claim_external_delivery():
     assert not checker.check({}, require_email=True, require_push=True)["configuration_valid"]
 
 
+def test_wifi_install_requires_notifications_to_stay_off():
+    checker = load("notification-preflight")
+    assert checker.check({"SMTP_HOST": "", "MOBILE_PUSH_ENABLED": "0"}, require_disabled=True)["configuration_valid"]
+    assert not checker.check({"SMTP_HOST": "smtp.example.invalid"}, require_disabled=True)["configuration_valid"]
+    assert not checker.check({"MOBILE_PUSH_ENABLED": "1"}, require_disabled=True)["configuration_valid"]
+
+
 def test_email_credentials_are_checked_but_never_exposed(capsys):
     checker = load("notification-preflight")
     config = {"SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "587", "SMTP_STARTTLS": "1",

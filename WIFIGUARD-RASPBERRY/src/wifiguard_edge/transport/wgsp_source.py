@@ -26,6 +26,9 @@ from .wgsp_protocol import AMFALL_SPI_FRAME_BYTES, SpiProtocolError, decode_spi_
 log = logging.getLogger("transport.wgsp")
 
 MAX_SPI_TRANSACTION_BYTES = 8_192
+# One Batch8 arrives every 25 ms at 320 Hz. A missed GPIO edge must not leave
+# an already-high READY unchecked for the old 50 ms timeout.
+READY_LEVEL_POLL_SECONDS = .005
 
 
 class _SpiIocTransfer(ctypes.Structure):
@@ -153,6 +156,10 @@ class WgspBatch8Source(threading.Thread):
         self._last_epoch: int | None = None
         self._spi: LinuxDirectSpi | None = None
         self._ready_request: Any | None = None
+        self._last_handshake_timed_out = False
+        self._current_batch_timing: dict[str, Any] = {}
+        self._last_ready_wait: dict[str, Any] = {}
+        self._last_rising_edge_ns: int | None = None
 
     @property
     def running(self) -> bool:
@@ -224,28 +231,44 @@ class WgspBatch8Source(threading.Thread):
     def _drain_edges(self) -> None:
         assert self._ready_request is not None
         while self._ready_request.wait_edge_events(0):
-            self._ready_request.read_edge_events()
+            for event in self._ready_request.read_edge_events():
+                if event.event_type == event.Type.RISING_EDGE:
+                    self._last_rising_edge_ns = event.timestamp_ns
 
     def _wait_ready(self) -> bool:
         assert self._ready_request is not None
+        timeouts = wakeups = 0
         while not self._stop_event.is_set():
             if self._is_ready():
                 self._drain_edges()
+                self._last_ready_wait = {
+                    'ready_poll_timeouts':timeouts, 'ready_edge_wakeups':wakeups,
+                    'rising_edge_age_ms':max(0.,(time.monotonic_ns()-self._last_rising_edge_ns)/1e6)
+                    if self._last_rising_edge_ns is not None else None,
+                }
                 return True
-            if self._ready_request.wait_edge_events(0.05):
+            if self._ready_request.wait_edge_events(READY_LEVEL_POLL_SECONDS):
+                wakeups += 1
                 self._drain_edges()
+            else:
+                timeouts += 1
         return False
 
     def _wait_transaction_edge(self) -> bool:
         """Wait for the receiver's READY fall/rise handshake after the clocks."""
 
         assert self._ready_request is not None
+        self._last_handshake_timed_out = False
         deadline = time.monotonic() + 0.1
         while not self._stop_event.is_set() and time.monotonic() < deadline:
             if self._ready_request.wait_edge_events(0.01):
                 self._drain_edges()
                 return True
+        self._last_handshake_timed_out = not self._stop_event.is_set()
         return not self._stop_event.is_set()
+
+    def _observe_batch(self, timing: dict[str, Any]) -> None:
+        """Optional bounded local diagnostics; never changes READY semantics."""
 
     def _append(self, frame: Any) -> None:
         if not frame.usable_for_preprocessing:
@@ -276,6 +299,7 @@ class WgspBatch8Source(threading.Thread):
 
     def run(self) -> None:
         transfer_bytes = AMFALL_SPI_FRAME_BYTES * self.config.spi_batch_frames
+        previous_transfer = None
         try:
             self._ready_request = self._open_ready()
             self._spi = LinuxDirectSpi(
@@ -285,19 +309,39 @@ class WgspBatch8Source(threading.Thread):
             )
             self._connected = True
             while not self._stop_event.is_set():
+                waiting = time.perf_counter()
                 if not self._wait_ready():
                     break
+                transferring = time.perf_counter()
+                self._current_batch_timing = {
+                    'wall_time_unix':time.time(),
+                    'ready_wait_ms':(transferring-waiting)*1000,
+                    'inter_transfer_ms':(transferring-previous_transfer)*1000 if previous_transfer is not None else None,
+                    **self._last_ready_wait,
+                }
+                previous_transfer = transferring
                 try:
                     batch = self._spi.transfer(transfer_bytes)
                 except (OSError, RuntimeError, ValueError, OverflowError):
                     self._transport_errors += 1
+                    self._observe_batch({**self._current_batch_timing, 'transport_error':True,
+                                         'transfer_ms':(time.perf_counter()-transferring)*1000})
                     log.exception("WGSP SPI transfer failed")
                     self._spi.close()
                     time.sleep(self.config.spi_protocol_resync_seconds)
                     continue
 
+                transferred = time.perf_counter()
                 self._wait_transaction_edge()
+                handshaken = time.perf_counter()
+                self._current_batch_timing.update({
+                    'transfer_ms':(transferred-transferring)*1000,
+                    'handshake_ms':(handshaken-transferred)*1000,
+                    'handshake_timeout':self._last_handshake_timed_out,
+                })
                 valid = 0
+                first_seq = last_seq = None
+                rejects_before = self._protocol_rejects
                 for offset in range(0, len(batch), AMFALL_SPI_FRAME_BYTES):
                     transaction = batch[offset : offset + AMFALL_SPI_FRAME_BYTES]
                     try:
@@ -307,8 +351,15 @@ class WgspBatch8Source(threading.Thread):
                         self._reject_reasons[exc.reason] += 1
                         continue
                     valid += 1
+                    if first_seq is None:
+                        first_seq = frame.frame_seq
+                    last_seq = frame.frame_seq
                     self._append(frame)
 
+                self._observe_batch({**self._current_batch_timing,
+                    'decode_append_ms':(time.perf_counter()-handshaken)*1000,
+                    'valid_frames':valid, 'protocol_rejects':self._protocol_rejects-rejects_before,
+                    'first_frame_seq':first_seq, 'last_frame_seq':last_seq})
                 if valid == 0:
                     # Field recovery: the receiver retains the batch, while
                     # reopening the Pi descriptor clears an all-zero/stale read.

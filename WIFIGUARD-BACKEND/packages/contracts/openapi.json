@@ -62,6 +62,25 @@
         "title": "BindingIn",
         "type": "object"
       },
+      "ChangeOut": {
+        "properties": {
+          "transaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "transaction"
+        ],
+        "title": "ChangeOut",
+        "type": "object"
+      },
       "CommandIn": {
         "additionalProperties": false,
         "properties": {
@@ -103,6 +122,45 @@
           "action"
         ],
         "title": "CommandIn",
+        "type": "object"
+      },
+      "ConnectIn": {
+        "additionalProperties": false,
+        "properties": {
+          "hidden": {
+            "default": false,
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "password": {
+            "format": "password",
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          },
+          "security": {
+            "default": "wpa-psk",
+            "enum": [
+              "wpa-psk",
+              "sae"
+            ],
+            "title": "Security",
+            "type": "string"
+          },
+          "ssid": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Ssid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ssid",
+          "password"
+        ],
+        "title": "ConnectIn",
         "type": "object"
       },
       "DeviceIn": {
@@ -1157,6 +1215,32 @@
         "title": "InstallationOut",
         "type": "object"
       },
+      "InterfaceOut": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "addresses",
+          "connected"
+        ],
+        "title": "InterfaceOut",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -1315,6 +1399,34 @@
           "createdAt"
         ],
         "title": "MemberOut",
+        "type": "object"
+      },
+      "NetworkOut": {
+        "properties": {
+          "security": {
+            "enum": [
+              "wpa-psk",
+              "sae",
+              "unsupported"
+            ],
+            "title": "Security",
+            "type": "string"
+          },
+          "signal": {
+            "title": "Signal",
+            "type": "integer"
+          },
+          "ssid": {
+            "title": "Ssid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ssid",
+          "signal",
+          "security"
+        ],
+        "title": "NetworkOut",
         "type": "object"
       },
       "PasswordChangeIn": {
@@ -2168,6 +2280,22 @@
         "title": "ResidentPatch",
         "type": "object"
       },
+      "ScanOut": {
+        "properties": {
+          "networks": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkOut"
+            },
+            "title": "Networks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "networks"
+        ],
+        "title": "ScanOut",
+        "type": "object"
+      },
       "ScenarioIn": {
         "additionalProperties": false,
         "properties": {
@@ -2262,6 +2390,78 @@
           "service"
         ],
         "title": "SignupIn",
+        "type": "object"
+      },
+      "StatusOut": {
+        "properties": {
+          "autoconnect": {
+            "default": false,
+            "title": "Autoconnect",
+            "type": "boolean"
+          },
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "edge_stopped": {
+            "default": false,
+            "title": "Edge Stopped",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/components/schemas/InterfaceOut"
+            },
+            "title": "Interfaces",
+            "type": "array"
+          },
+          "secure_credentials_transport": {
+            "default": false,
+            "title": "Secure Credentials Transport",
+            "type": "boolean"
+          },
+          "ssid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssid"
+          },
+          "transaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at_unix": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At Unix"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "StatusOut",
         "type": "object"
       },
       "TenantConfigIn": {
@@ -2403,6 +2603,64 @@
           "user"
         ],
         "title": "TokenPair",
+        "type": "object"
+      },
+      "TransactionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "TransactionIn",
+        "type": "object"
+      },
+      "TransactionOut": {
+        "properties": {
+          "deadline": {
+            "title": "Deadline",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "connecting",
+              "awaiting_confirmation",
+              "committing",
+              "committed",
+              "rolling_back",
+              "rolled_back"
+            ],
+            "title": "Phase",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase",
+          "deadline"
+        ],
+        "title": "TransactionOut",
         "type": "object"
       },
       "UserOut": {
@@ -4467,6 +4725,196 @@
         "summary": "Command",
         "tags": [
           "local-edge"
+        ]
+      }
+    },
+    "/api/v1/local-edge/network/confirm": {
+      "post": {
+        "operationId": "confirm_api_v1_local_edge_network_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm",
+        "tags": [
+          "local-network"
+        ]
+      }
+    },
+    "/api/v1/local-edge/network/connect": {
+      "post": {
+        "operationId": "connect_api_v1_local_edge_network_connect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect",
+        "tags": [
+          "local-network"
+        ]
+      }
+    },
+    "/api/v1/local-edge/network/rollback": {
+      "post": {
+        "operationId": "rollback_api_v1_local_edge_network_rollback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback",
+        "tags": [
+          "local-network"
+        ]
+      }
+    },
+    "/api/v1/local-edge/network/scan": {
+      "post": {
+        "operationId": "scan_api_v1_local_edge_network_scan_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scan",
+        "tags": [
+          "local-network"
+        ]
+      }
+    },
+    "/api/v1/local-edge/network/status": {
+      "get": {
+        "operationId": "status_api_v1_local_edge_network_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Status",
+        "tags": [
+          "local-network"
         ]
       }
     },

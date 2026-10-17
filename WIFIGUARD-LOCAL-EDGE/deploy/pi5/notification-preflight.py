@@ -3,18 +3,32 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import stat
+import time
 from pathlib import Path
 
 
-def check(config, *, require_email=False, require_push=False, check_permissions=True):
+def check(config, *, require_email=False, require_push=False, require_disabled=False, check_permissions=True):
     errors, warnings = [], []
     email = bool(config.get("SMTP_HOST", ""))
     push = config.get("MOBILE_PUSH_ENABLED", "0") == "1"
+    manual = config.get("MOBILE_NATIVE_TEST_PUSH_ENABLED", "0") == "1"
+    if require_disabled and (email or push or manual):
+        errors.append("External email and push must remain disabled for this hardware check")
     if config.get("MOBILE_PUSH_ENABLED", "0") not in ("0", "1"):
         errors.append("MOBILE_PUSH_ENABLED must be 0 or 1")
+    if config.get("MOBILE_NATIVE_TEST_PUSH_ENABLED", "0") not in ("0", "1"):
+        errors.append("MOBILE_NATIVE_TEST_PUSH_ENABLED must be 0 or 1")
+    if manual:
+        try:
+            remaining = float(config.get("MOBILE_NATIVE_TEST_PUSH_EXPIRES_AT", "")) - time.time()
+            if push or not math.isfinite(remaining) or not 0 < remaining <= 12 * 3600:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append("Native manual push requires an unexpired grant of at most 12 hours and automatic push disabled")
     if config.get("PC_SIMULATION_MODE", "0") != "0":
         errors.append("PC_SIMULATION_MODE must be 0 on the operating Pi5")
     if config.get("MOBILE_PC_TEST_PUSH_ENABLED", "0") != "0":
@@ -34,7 +48,7 @@ def check(config, *, require_email=False, require_push=False, check_permissions=
                 raise ValueError
         except (TypeError, ValueError):
             errors.append("Use a valid STARTTLS SMTP port (normally 587, not implicit-TLS 465)")
-    if not push:
+    if not (push or manual):
         (errors if require_push else warnings).append("Android FCM push is disabled")
     else:
         project = config.get("FCM_PROJECT_ID", "") or ""
@@ -77,6 +91,7 @@ def check(config, *, require_email=False, require_push=False, check_permissions=
             except Exception:
                 errors.append("FCM key/dependencies are invalid or do not match the project; details suppressed")
     return {"configuration_valid": not errors, "email_configured": email, "fcm_enabled": push,
+            "native_manual_test_enabled": manual,
             "external_delivery_verified": False, "network_requests_performed": False,
             "errors": errors, "warnings": warnings}
 
@@ -86,13 +101,15 @@ def main(argv=None):
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--require-email", action="store_true")
     parser.add_argument("--require-push", action="store_true")
+    parser.add_argument("--require-disabled", action="store_true")
     args = parser.parse_args(argv)
     try:
         if not args.config.is_file() or args.config.stat().st_size > 65536:
             raise ValueError("Missing or oversized private configuration")
         from dotenv import dotenv_values
         result = check(dict(dotenv_values(args.config, interpolate=False)),
-                       require_email=args.require_email, require_push=args.require_push)
+                       require_email=args.require_email, require_push=args.require_push,
+                       require_disabled=args.require_disabled)
     except Exception:
         result = {"configuration_valid": False, "errors": ["Configuration is unreadable or the service account is unavailable; details suppressed"]}
     print(json.dumps(result))

@@ -63,6 +63,123 @@ def test_durable_fifo_survives_error_and_process_restart(tmp_path):
     second.stop()
 
 
+def test_full_commit_survives_abrupt_process_exit_without_close(tmp_path):
+    import subprocess
+    import sys
+    path=tmp_path/'outbox.db'
+    script='''
+import os,sys
+from types import SimpleNamespace
+from pathlib import Path
+from wifiguard_local_edge.relay import LocalRelay
+relay=LocalRelay('http://localhost:8000','x'*48,Path(sys.argv[1]))
+relay.offer('inference',SimpleNamespace(model_dump=lambda **_: {'seq':71}),durable=True)
+os._exit(0)
+'''
+    subprocess.run([sys.executable,'-c',script,str(path)],check=True,capture_output=True,timeout=15)
+    sent=[]
+    relay=LocalRelay('http://localhost:8000','x'*48,path,sender=lambda b:sent.append(json.loads(b)))
+    assert relay.status()['durable_pending'] == 1
+    assert relay.flush_once()
+    assert sent[0]['record']['seq'] == 71
+    relay.stop()
+
+
+@pytest.mark.parametrize('rollback_fails',[False,True])
+def test_failed_commit_cannot_be_sent_or_reported_as_a_durable_success(tmp_path,rollback_fails):
+    import sqlite3
+    sent=[]
+    relay=LocalRelay('http://localhost:8000','x'*48,tmp_path/'outbox.db',sender=sent.append)
+    real_db=relay._db
+    class FailedCommit:
+        def __getattr__(self,name):
+            return getattr(real_db,name)
+        def commit(self):
+            raise sqlite3.OperationalError('simulated disk full')
+        def rollback(self):
+            if rollback_fails:
+                raise sqlite3.OperationalError('simulated rollback failure')
+            real_db.rollback()
+    relay._db=FailedCommit()
+    with pytest.raises(RuntimeError,match='commit failed; result not accepted'):
+        relay.offer('inference',record(17),durable=True)
+    assert relay.status()['durable_pending'] == 0
+    assert relay.status()['durable_fault'] is True
+    assert relay.status()['durable_enqueue_ms']['count'] == 0
+    assert not relay.flush_once() and sent == []
+    with pytest.raises(RuntimeError,match='requires recovery'):
+        relay.offer('inference',record(18),durable=True)
+    relay.offer('presence',record(3),key='presence')
+    assert relay.flush_once()
+    assert relay.status()['durable_fault'] and 'commit failed' in relay.status()['last_error']
+    relay.stop()
+
+
+def test_only_ack_cleanup_uses_normal_sync_and_writer_remains_full(tmp_path):
+    relay = LocalRelay('http://localhost:8000', 'x'*48, tmp_path/'outbox.db', sender=lambda _: None)
+    assert relay._db.execute('PRAGMA synchronous').fetchone()[0] == 2
+    assert relay._ack_db.execute('PRAGMA synchronous').fetchone()[0] == 1
+    relay.offer('inference', record(1), durable=True)
+    assert relay.flush_once()
+    relay.offer('inference', record(2), durable=True)
+    assert relay._db.execute('PRAGMA synchronous').fetchone()[0] == 2
+    assert relay.status()['durable_pending'] == 1
+    assert relay.status()['durable_enqueue_ms']['count'] == 2
+    assert relay.status()['ack_cleanup_ms']['count'] == 1
+    relay.stop()
+
+
+def test_lost_ack_replays_same_identity_without_dropping_fifo(tmp_path):
+    attempts = []
+    def lost_ack(body):
+        attempts.append(json.loads(body)['record']['seq'])
+        if len(attempts) == 1:
+            raise RuntimeError('backend committed, HTTP ACK was lost')
+    relay = LocalRelay('http://localhost:8000','x'*48,tmp_path/'outbox.db',sender=lost_ack)
+    relay.offer('inference',record(41),durable=True)
+    assert not relay.flush_once() and relay.status()['durable_pending'] == 1
+    assert relay.flush_once() and relay.status()['durable_pending'] == 0
+    assert attempts == [41,41]
+    relay.stop()
+
+
+def test_checkpoint_is_separate_and_does_not_lower_full_writer_sync(tmp_path):
+    relay = LocalRelay('http://localhost:8000','x'*48,tmp_path/'outbox.db',sender=lambda _:None,checkpoint_every=2)
+    for seq in range(4):
+        relay.offer('inference',record(seq),durable=True)
+        assert relay.flush_once()
+    assert relay.status()['checkpoints'] == 2
+    assert relay.status()['checkpoint_errors'] == 0
+    assert relay._db.execute('PRAGMA wal_autocheckpoint').fetchone()[0] == 0
+    assert relay._db.execute('PRAGMA synchronous').fetchone()[0] == 2
+    relay.stop()
+
+
+def test_commit_latency_is_measured_without_weakening_durable_ack(tmp_path):
+    import sqlite3
+    relay = LocalRelay('http://localhost:8000','x'*48,tmp_path/'outbox.db',sender=lambda _:None)
+    real_db = relay._db
+    class SlowCommit:
+        def __getattr__(self,name):
+            return getattr(real_db,name)
+        def commit(self):
+            time.sleep(.06)
+            real_db.commit()
+    relay._db = SlowCommit()
+    relay.offer('inference',record(13),durable=True)
+    # A separate reader sees the committed row BEFORE offer returns to its caller.
+    with sqlite3.connect(tmp_path/'outbox.db') as other:
+        assert json.loads(other.execute('SELECT body FROM outbox').fetchone()[0])['record']['seq'] == 13
+    state = relay.status()
+    phases = state['durable_enqueue_phases_ms']
+    assert phases['full_commit']['max'] >= 60
+    assert phases['insert']['max'] < phases['full_commit']['max']
+    assert state['recent_slow_enqueues'][-1]['total_ms'] >= 60
+    assert 'body' not in state['recent_slow_enqueues'][-1]
+    assert real_db.execute('PRAGMA synchronous').fetchone()[0] == 2
+    relay.stop()
+
+
 def test_live_queue_coalesces_and_durable_overflow_is_not_silent(tmp_path):
     relay = LocalRelay(
         "http://localhost:8000", "x" * 48, tmp_path / "outbox.db", capacity=1

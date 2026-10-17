@@ -1,5 +1,78 @@
 # Pi5: PR 백엔드·DB·화면을 함께 실행하는 로컬 프로필
 
+## 2026-10-16 Wi-Fi GUI 업데이트
+
+최신 장치 관리 화면에 **Wi-Fi 검색 / 이름·보안 방식·비밀번호 입력 / 임시 연결 /
+연결 확인·저장 / 되돌리기 / 유·무선 IP / 자동 재접속 상태**를 추가했다.
+Wi-Fi GUI는 기본 비활성(`PI5_WIFI_ENABLED=0`)이며 기존 Pi3/클라우드 동작은 바꾸지 않는다.
+실제 SPI 장치를 바인딩한 소유자 또는 시설 관리자만 변경할 수 있다.
+
+API는 root 명령을 실행하지 않는다. 별도 root 브로커가 권한 제한 Unix 소켓을 통해
+고정 `wlan0`만 관리한다. NetworkManager는 **wlan0 외 인터페이스를 unmanaged**로 두고,
+기존 `eth0`/netplan/systemd-networkd 설정은 수정하지 않는다. 스캔/연결은 수신 중지 후에만
+가능하며, 연결 변경과 수신 시작은 공통 프로세스 잠금으로 직렬화한다.
+
+연결 전 NetworkManager의 wlan0 전용 120초 체크포인트를 만들고, GUI에서는 110초 이내에
+확인을 받는다. 확인 전 후보 연결은 자동 연결 꺼짐 상태다. 실패/기한 경과/취소/미완료
+브로커 재시작 시 이전 Wi-Fi로 복구하고 **이번 후보만 삭제**한다. 다른 네트워크 프로필은
+지우지 않는다. 복구 실패는 숨기지 않으며, pending 상태로 수신 시작을 계속 차단한다.
+GUI 저장은 AP 연결/IP 확인의 의미이지 인터넷·랜선 제거·센서 성능의 자동 인증이 아니다.
+
+공유기 비밀번호는 root 0600 NM keyfile에만 저장하며 API 응답·명령 인자·DB 이벤트·화면
+저장소에 넣지 않는다. 임시 연결에도 보호된 임시 keyfile은 필요하다. 일반 LAN HTTP에서는
+비밀번호 입력/전송을 차단한다. HTTPS 또는 아래의 루프백 SSH 터널로 GUI를 사용한다.
+nginx가 실제 전송 경로를 판정해 헤더를 덮어쓰며 클라이언트의 Forwarded 헤더를 믿지 않는다.
+
+### 기존 Pi5에 설치할 때
+
+먼저 코드·DB·개인 환경 파일과 nginx 설정을 비공개로 백업하고, 수신을 중지한다.
+새 코드/UI 업데이트 ZIP의 해시를 검증한 뒤 `/opt/wifiguard`에 반영한다.
+모델·가상환경·DB·계정·키·보정값을 초기화하지 않는다. 기존 파이썬 의존성은 그대로다.
+새 운영 UI는 PC에서 빌드해 내보내며 Pi5에서 npm 빌드를 하지 않는다.
+
+```bash
+sudo bash /opt/wifiguard/WIFIGUARD-LOCAL-EDGE/deploy/pi5/prepare-network.sh --activate-wifi-gui
+```
+
+이 명령은 **명시적으로 실행할 때만** OS NetworkManager/wpasupplicant를 설치하고
+Wi-Fi 관리 서비스를 시작·부팅 자동 등록하며 API/nginx를 재시작한다. 인터넷 패키지 다운로드가
+필요하다. 외부 이메일/FCM/PC 푸시 허용이 있으면 설치를 중단한다. 기존 wlan0/netplan
+설정이 있으면 자동 덮어쓰기 대신 중단해 별도로 확인한다. 기존 설정은 새 0700
+`/var/backups/wifiguard-wifi-*`에 백업한다. 수신/추론은 자동으로 시작하지 않는다.
+
+PC에서 개인 SSH 키를 사용하는 보안 GUI 연결 예:
+
+```powershell
+.\open-wifi-gui.ps1 -PiAddress PI5_IP -IdentityFile PRIVATE_SSH_KEY_PATH -BindAddress PC_LAN_IP
+```
+
+터널이 연결되면 `http://127.0.0.1:18080/devices`에서 로그인한다. IP로 사용했던 계정과
+같은 계정이며, 새 브라우저 주소에서는 다시 로그인해야 할 수 있다. 터널은 PC 루프백에만
+열린다. 이미 확인된 SSH 호스트 키가 필요하고 창을 닫으면 종료한다. 처음 설정할 때에는
+랜선을 유지한다. 외부 인터넷에 8080/8000/5432 포트를 개방하지 않는다.
+
+### 인클로저·무선 실물 검증 순서
+
+1. 전원/배선/수신기 USB 중복 전원 없음, API/DB/센서 정지 및 알림 OFF 확인.
+2. 랜선이 있는 상태에서 GUI로 Wi-Fi 임시 연결 → 무선 IP 접속 → 저장.
+3. **실제로 랜선을 제거**한 뒤 무선 IP로 SSH·화면·API 재접속. eth0 carrier=0과
+   응답 경로가 wlan0임을 확인한다. 같은 공유기에 유선이 남아 있으면 무선 단독 검증이 아니다.
+4. 새 빈방 보정 → 센서 연속 320Hz 수신·시퀀스/CRC/드롭 확인 → 재실 시 0.5초 추론·DB 적재.
+5. 전체 서비스 CPU/RAM/스왑/처리시간/온도·쓰로틀 상태 수집. Wi-Fi 모드에서는 기존 7개에
+   broker/NetworkManager/wpa_supplicant 3개를 추가한다. 누락 서비스는 0으로 숨기지 않는다.
+6. 랜선 없는 정상 재부팅 후 Wi-Fi 자동 복구 확인. Edge는 안전상 자동 보정/추론 시작하지
+   않으므로 계정 로그인·빈방 확인 후 다시 시작한다. 통신 단절 시 로컬 SPI/추론/DB 경로는
+   네트워크와 독립이지만 웹 접속은 끊기며, 복귀 후 데이터/상태 연속성을 별도로 확인한다.
+
+실물 검증은 설치와 해당 절차를 실제로 마친 뒤에만 통과로 기록한다. PC 단위 테스트와
+Linux IPC/nmcli 파서 검증은 실제 AP 연결, 무선 전파 간섭, 인클로저 발열의 증명이 아니다.
+최신 테스트 증빙은 업데이트 ZIP 옆 `SOFTWARE-VALIDATION.json` 및 테스트 로그에 별도 보관한다.
+NetworkManager의 장치 제외/체크포인트 동작은
+[설정 문서](https://networkmanager.dev/docs/api/latest/NetworkManager.conf.html)와
+[D-Bus API](https://www.networkmanager.dev/docs/api/1.48/gdbus-org.freedesktop.NetworkManager.html)를 따른다.
+
+---
+
 > **2026-10-15 최신 애플리케이션 배포본**: 최신 PC/모바일 웹 UI, 원본 FP32 모델,
 > SMTP/FCM 의존성과 DB 0005가 포함된 ZIP 설치는 [RELEASE.md](RELEASE.md)를 우선 참고한다.
 > 이 문서 아래에는 이전 단계의 실측/준비 기록도 남아 있다. 이번 변경은 실물에 배포하지 않았다.

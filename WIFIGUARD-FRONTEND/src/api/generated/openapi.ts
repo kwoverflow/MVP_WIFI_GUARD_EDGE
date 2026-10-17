@@ -396,6 +396,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/local-edge/network/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm */
+        post: operations["confirm_api_v1_local_edge_network_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-edge/network/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Connect */
+        post: operations["connect_api_v1_local_edge_network_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-edge/network/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback */
+        post: operations["rollback_api_v1_local_edge_network_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-edge/network/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan */
+        post: operations["scan_api_v1_local_edge_network_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/local-edge/network/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_api_v1_local_edge_network_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/local-edge/simulation/alert-test": {
         parameters: {
             query?: never;
@@ -765,6 +850,10 @@ export interface components {
              */
             device_id: string;
         };
+        /** ChangeOut */
+        ChangeOut: {
+            transaction: components["schemas"]["TransactionOut"] | null;
+        };
         /** CommandIn */
         CommandIn: {
             /**
@@ -784,6 +873,27 @@ export interface components {
             empty_room_confirmed: boolean;
             /** Run Id */
             run_id?: string | null;
+        };
+        /** ConnectIn */
+        ConnectIn: {
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+            /**
+             * Security
+             * @default wpa-psk
+             * @enum {string}
+             */
+            security: "wpa-psk" | "sae";
+            /** Ssid */
+            ssid: string;
         };
         /** DeviceIn */
         DeviceIn: {
@@ -1112,6 +1222,15 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** InterfaceOut */
+        InterfaceOut: {
+            /** Addresses */
+            addresses: string[];
+            /** Connected */
+            connected: boolean;
+            /** Name */
+            name: string;
+        };
         /** LoginIn */
         LoginIn: {
             /** Email */
@@ -1180,6 +1299,18 @@ export interface components {
              * @enum {string}
              */
             role: "ROOT" | "MEMBER" | "USER";
+        };
+        /** NetworkOut */
+        NetworkOut: {
+            /**
+             * Security
+             * @enum {string}
+             */
+            security: "wpa-psk" | "sae" | "unsupported";
+            /** Signal */
+            signal: number;
+            /** Ssid */
+            ssid: string;
         };
         /** PasswordChangeIn */
         PasswordChangeIn: {
@@ -1421,6 +1552,11 @@ export interface components {
             /** Thresholdoverride */
             thresholdOverride?: number | null;
         };
+        /** ScanOut */
+        ScanOut: {
+            /** Networks */
+            networks: components["schemas"]["NetworkOut"][];
+        };
         /** ScenarioIn */
         ScenarioIn: {
             /**
@@ -1448,6 +1584,38 @@ export interface components {
              * @enum {string}
              */
             service: "HOME" | "FACILITY";
+        };
+        /** StatusOut */
+        StatusOut: {
+            /**
+             * Autoconnect
+             * @default false
+             */
+            autoconnect: boolean;
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /**
+             * Edge Stopped
+             * @default false
+             */
+            edge_stopped: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Interfaces */
+            interfaces?: components["schemas"]["InterfaceOut"][];
+            /**
+             * Secure Credentials Transport
+             * @default false
+             */
+            secure_credentials_transport: boolean;
+            /** Ssid */
+            ssid?: string | null;
+            transaction?: components["schemas"]["TransactionOut"] | null;
+            /** Updated At Unix */
+            updated_at_unix?: number | null;
         };
         /** TenantConfigIn */
         TenantConfigIn: {
@@ -1505,6 +1673,31 @@ export interface components {
              */
             tokenType: "Bearer";
             user: components["schemas"]["UserOut"];
+        };
+        /** TransactionIn */
+        TransactionIn: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** TransactionOut */
+        TransactionOut: {
+            /** Deadline */
+            deadline: number;
+            /** Error */
+            error?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: "connecting" | "awaiting_confirmation" | "committing" | "committed" | "rolling_back" | "rolled_back";
         };
         /** UserOut */
         UserOut: {
@@ -2927,6 +3120,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_api_v1_local_edge_network_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_api_v1_local_edge_network_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_api_v1_local_edge_network_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_api_v1_local_edge_network_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanOut"];
+                };
+            };
+        };
+    };
+    status_api_v1_local_edge_network_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
         };

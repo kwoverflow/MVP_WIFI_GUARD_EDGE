@@ -26,6 +26,14 @@ google-services.json
 *.aab
 *.tar
 *.zip
+*.dump
+*.img
+*.img.xz
+# Private team demo envelopes remain private, even when encrypted.
+credentials/
+*.encrypted.json
+*passphrase*.txt
+KEY-REVOCATION.json
 
 # Local builds, environments and validation outputs
 .venv*/

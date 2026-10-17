@@ -1,0 +1,31 @@
+[Unit]
+Description=WIFI-GUARD wlan0-only Wi-Fi GUI broker
+Requires=NetworkManager.service
+After=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+Group=wifiguard
+WorkingDirectory=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE
+ExecStart=/opt/wifiguard/WIFIGUARD-LOCAL-EDGE/.venv-onnx/bin/python -m wifiguard_local_edge.network_agent
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=wifiguard-network
+RuntimeDirectoryMode=0750
+StateDirectory=wifiguard-network
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/NetworkManager/system-connections
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+ProtectKernelTunables=true
+ProtectControlGroups=true
+MemoryMax=128M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

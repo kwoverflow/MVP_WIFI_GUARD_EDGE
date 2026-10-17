@@ -73,8 +73,16 @@ def unit_state():
 
 
 def systemd_action(action):
-    subprocess.run(["systemctl", "--no-ask-password", action, UNIT], check=True,
-                   capture_output=True, timeout=40)
+    def execute():
+        subprocess.run(["systemctl", "--no-ask-password", action, UNIT], check=True,
+                       capture_output=True, timeout=40)
+    if os.getenv("PI5_WIFI_ENABLED") == "1" and action in ("start", "restart"):
+        from .network_agent import capture_guard, capture_network_check
+        with capture_guard():
+            capture_network_check()
+            execute()
+    else:
+        execute()
 
 
 class ControlAgent:
